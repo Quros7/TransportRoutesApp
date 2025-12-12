@@ -11,10 +11,12 @@
     </div>
 
     <form method="POST" id="price-matrix-form">
-        {{ form.hidden_tag() }}
-        
+        {{ form.csrf_token }}
         {# Скрытое поле, куда JavaScript поместит всю матрицу в виде JSON #}
         {{ form.price_matrix_data(id='price-matrix-data') }}
+        
+        {# Скрытое поле, куда JavaScript поместит всю матрицу в виде JSON #}
+        {# {{ form.price_matrix_data(id='price-matrix-data') }} #}
 
         <div class="table-responsive">
             <table class="table table-bordered table-sm price-matrix">
@@ -85,7 +87,10 @@
         
         <div class="mt-4">
             {# При нажатии вызывается JS-функция, которая собирает данные и отправляет форму #}
-            {{ form.save_prices(class="btn btn-success", onclick="collectMatrixData()") }}
+            {# {{ form.save_prices(class="btn btn-success", onclick="return collectMatrixData(event)") }} #}
+            <button type="button" id="save-prices-btn" class="btn btn-success" onclick="collectMatrixData(event)">
+                Сохранить цены
+            </button>
             <a href="{{ url_for('route_list') }}" class="btn btn-secondary">Отмена</a>
         </div>
     </form>
@@ -95,93 +100,58 @@
 {{ super() }}
 <script>
     /**
-     * Собирает все данные из интерактивной матрицы цен, формирует JSON-структуру
-     * и помещает ее в скрытое поле 'price-matrix-data' перед отправкой формы.
+     * Собирает матрицу цен → кладёт JSON в скрытое поле →
+     * предотвращает стандартный submit → отправляет форму вручную.
      */
-    function collectMatrixData() {
-        const stopsCount = {{ route.stops | length }};
-        
-        // --- DEBUG 1: Проверка количества остановок ---
-        console.log('DEBUG (JS): Количество остановок (stopsCount):', stopsCount);
+    function collectMatrixData(event) {
+        console.log("FUNCTION CALLED!");
+        alert("called");
 
-        // 1. Инициализация пустой матрицы (stopsCount x stopsCount)
-        // Все элементы по умолчанию 'null'
+        // Блокируем мгновенную отправку submit-кнопкой WTForms
+        if (event) {
+            event.preventDefault();
+        }
+
+        const stopsCount = {{ route.stops | length }};
+
         let matrix = [];
         for (let i = 0; i < stopsCount; i++) {
-            // Создаем массив с пустыми значениями (null)
             matrix[i] = new Array(stopsCount).fill(null);
         }
 
-        // 2. Итерируемся по всем ячейкам таблицы, которые содержат поля ввода
         const cells = document.querySelectorAll('.price-matrix td[data-start-index]');
-        
-        // --- DEBUG 2: Проверка, сколько ячеек найдено ---
-        console.log('DEBUG (JS): Найдено ячеек для обработки:', cells.length);
 
         cells.forEach(cell => {
-            // Получаем индексы (i - строка, j - столбец)
             const i = parseInt(cell.getAttribute('data-start-index'));
             const j = parseInt(cell.getAttribute('data-end-index'));
-            
-            let priceData = {};
-            let hasPrice = false;
 
-            // 3. Для каждой ячейки собираем цены по всем тарифам
+            let priceData = {};
             const inputs = cell.querySelectorAll('.price-input');
+
             inputs.forEach(input => {
                 const tariffId = input.getAttribute('data-tariff-id');
                 let value = input.value.trim();
-                
                 let numericValue = null;
 
                 if (value !== '' && !isNaN(parseFloat(value))) {
-                    numericValue = parseFloat(parseFloat(value).toFixed(2)); // Округляем до 2 знаков
-                    if (numericValue > 0) {
-                        hasPrice = true;
-                    }
+                    numericValue = parseFloat(parseFloat(value).toFixed(2));
                 }
-                
-                // Сохраняем цену. В спецификации допускается пропуск,
-                // но для надежности хранения в нашей матрице лучше сохранять 0,
-                // если поле было пустым, но ячейка должна существовать.
-                // Если нет цены, ставим 0.
-                priceData[tariffId] = numericValue || 0; 
+
+                priceData[tariffId] = numericValue || 0;
             });
 
-            // 4. Помещаем словарь цен в соответствующее место в матрице
-            // Мы сохраняем ячейку, даже если все цены 0, чтобы сохранить структуру.
             matrix[i][j] = priceData;
-
-            // --- DEBUG 3: Логируем данные каждой заполненной ячейки ---
-            // if (hasPrice) { 
-            //     console.log(`Ячейка [${i}][${j}] сохранена:`, priceData);
-            // }
-            // Мы будем полагаться на финальное логирование JSON
         });
 
-        // --- DEBUG 4: Проверка итогового объекта перед сериализацией ---
-        console.log('DEBUG (JS): Итоговая матрица (объект JS):', matrix);
+        const jsonString = JSON.stringify(matrix);
+        document.getElementById('price-matrix-data').value = jsonString;
 
-        // 5. Сериализуем готовую матрицу в JSON-строку
-        const matrixJsonString = JSON.stringify(matrix);
-        
-        // --- DEBUG 5: Проверка итоговой JSON-строки ---
-        console.log('DEBUG (JS): Итоговая JSON-строка:', matrixJsonString);
+        // === DEBUG ===
+        console.log("DEBUG: JSON-string записан:", jsonString.slice(0, 200) + "...");
 
-        // 6. Помещаем JSON-строку в скрытое поле формы
-        document.getElementById('price-matrix-data').value = matrixJsonString;
-        
-        // Убеждаемся, что поле не пустое, чтобы пройти валидатор DataRequired
-        // Валидный JSON для пустой матрицы: [[{}, {}, ...], ...] -> Длинная строка.
-        if (matrixJsonString.length > 5) {
-            console.log('DEBUG (JS): JSON-строка успешно записана и валидна. Отправка формы.');
-            return true; // Отправляем форму
-        } else {
-            // Этот блок не должен срабатывать, если stopsCount > 1
-            console.error("DEBUG (JS): Ошибка: JSON-строка слишком короткая (менее 5 символов). Вероятно, матрица пуста.");
-            alert("Матрица цен пуста или не была собрана.");
-            return false;
-        }
+        // Теперь, когда JSON гарантированно записан, отправляем форму
+        document.getElementById('price-matrix-form').submit();
+        return false;
     }
 </script>
 {% endblock %}

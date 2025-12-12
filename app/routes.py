@@ -294,69 +294,98 @@ def edit_route_stops(route_id):
     return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
 
 
-# --- Редактирование цен (Этап 3: Матрица) ---
 @app.route('/route/edit/<int:route_id>/prices', methods=['GET', 'POST'])
 @login_required
 def edit_route_prices(route_id):
-    # Унифицированный запрос
-    route = db.session.scalar(
-        sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id)
-    )
-    if route is None:
-        abort(404)
-        
-    if not route.stops or len(route.stops) < 2:
-        flash('Сначала необходимо добавить как минимум две остановки.', 'warning')
-        return redirect(url_for('edit_route_stops', route_id=route.id))
+    route = db.session.get(Route, route_id)
+    if not route:
+        flash('Маршрут не найден.', 'danger')
+        return redirect(url_for('route_list'))
 
+    # === Правильно: создаём форму БЕЗ request.form ===
     form = RoutePricesForm()
 
-    # 1. Сначала полагаемся на WTForms для проверки CSRF и POST-метода
-    if form.validate_on_submit():
-        
-        # 💥 ГИБРИДНЫЙ ОБХОД: Берем CSRF-проверку из WTForms, но данные берем напрямую
-        
-        # КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Чтение напрямую из request.form, чтобы обойти потерю данных
-        # (Мы знаем, что form.validate_on_submit() уже прочитал форму, 
-        # но request.form.get() иногда срабатывает лучше, чем .data)
-        json_data_raw = request.form.get('price_matrix_data')
-
-        current_app.logger.info(f"DEBUG A (Hybrid): Сырые данные из request.form: {json_data_raw[:100] if json_data_raw else 'None/Empty'}")
-
-        if not json_data_raw or not json_data_raw.strip():
-             flash('Ошибка: Не удалось получить данные матрицы из запроса.', 'danger')
-             
-             # Если данные не пришли, остаемся на странице (без обнуления, если нет ошибки декодирования)
-             return render_template(
-                 'route_prices_matrix.html', form=form, route=route, title=f'Редактирование цен: Шаг 3 ({route.route_name})'
-             )
-        
+    # --- ЛОГИРОВАНИЕ СЫРЫХ ДАННЫХ (для диагностики) ---
+    if request.method == 'POST':
+        # Покажем все ключи и первые 300 символов каждого значения (безопасно)
         try:
-            # Агрессивная очистка и декодирование
-            cleaned_string = json_data_raw.strip()
+            # request.form — MultiDict
+            form_dict = {k: (v[:300] + '...') if len(v) > 300 else v for k, v in request.form.items()}
+        except Exception as e:
+            form_dict = f"can't read request.form: {e}"
+
+        current_app.logger.info("DEBUG INCOMING POST — request.form keys & previews: %s", form_dict)
+        raw_body = request.get_data(as_text=True) or ""
+        current_app.logger.info("DEBUG INCOMING POST — raw body length=%s preview=%s", len(raw_body), raw_body[:500])
+
+    # === Основная логика: валидируем форму (CSRF и пр.) ===
+    if form.validate_on_submit():
+        # Попытка 1: брать значение из WTForms поля (нормальный путь)
+        json_data = form.price_matrix_data.data
+
+        current_app.logger.info("DEBUG (PY): Сырые данные (WTForms): %s | Тип: %s",
+                                (json_data[:200] + '...') if json_data else 'None/Empty',
+                                type(json_data))
+
+        # Резервный путь: если WTForms вернуло пусто — берём прямо из request.form
+        if not json_data or not str(json_data).strip():
+            fallback = request.form.get('price_matrix_data')
+            current_app.logger.info("DEBUG (PY): fallback request.form.get('price_matrix_data'): %s",
+                                    (fallback[:200] + '...') if fallback else 'None/Empty')
+            json_data = fallback
+
+        # Ещё резерв: если всё ещё пусто — пробуем разобрать сырую нагрузку (form-encoded или чистый JSON)
+        if not json_data or not str(json_data).strip():
+            raw_body = request.get_data(as_text=True) or ""
+            # raw_body может быть "price_matrix_data=%5B...%5D" (urlencoded) или чистый JSON
+            if raw_body:
+                # попробуем распарсить form-encoded
+                try:
+                    parsed = parse_qs(raw_body)
+                    if 'price_matrix_data' in parsed:
+                        cand = parsed.get('price_matrix_data')
+                        if cand:
+                            json_data = cand[0]
+                            current_app.logger.info("DEBUG (PY): extracted from parse_qs: preview=%s", json_data[:200])
+                except Exception as e:
+                    current_app.logger.exception("DEBUG (PY): parse_qs error: %s", e)
+            else:
+                current_app.logger.warning("DEBUG (PY): raw_body empty while request.form had nothing too.")
+
+        # Если по-прежнему пусто — НЕ перезаписываем матрицу пустым значением!
+        if not json_data or not str(json_data).strip():
+            current_app.logger.warning("DEBUG (PY): Поле price_matrix_data пустое после всех попыток. НЕ будет перезаписано.")
+            flash('Данные матрицы не получены. Попробуйте ещё раз.', 'warning')
+            return redirect(url_for('route_list'))
+
+        # Теперь безопасно пробуем распарсить JSON
+        try:
+            cleaned_string = str(json_data).strip()
+            # Удалить лишние одинарные кавычки вокруг строки, если они есть
             if cleaned_string.startswith("'") and cleaned_string.endswith("'"):
                 cleaned_string = cleaned_string[1:-1]
-            
+
+            current_app.logger.info("DEBUG (PY): Строка перед json.loads (preview): %s", cleaned_string[:300])
             new_matrix = json.loads(cleaned_string)
-            
-            # Сохранение и завершение
-            if isinstance(new_matrix, list): 
+
+            if isinstance(new_matrix, list):
                 route.price_matrix = new_matrix
                 db.session.commit()
-                
-                flash('Цены успешно сохранены и маршрут обновлен!', 'success')
-                return redirect(url_for('route_list')) 
+                flash('Цены успешно сохранены!', 'success')
+                return redirect(url_for('route_list'))
             else:
-                 flash('Неверный формат данных матрицы (ожидался список).', 'danger')
+                current_app.logger.error("DEBUG (PY): json.loads вернул не list, а %s", type(new_matrix))
+                flash('Неверный формат данных матрицы (ожидался список).', 'danger')
 
+        except json.JSONDecodeError as e:
+            current_app.logger.error("DEBUG (PY): JSON Decode Error: %s | preview: %s", e, (cleaned_string[:200] if 'cleaned_string' in locals() else ''))
+            flash('Ошибка при обработке данных цен. Пожалуйста, проверьте ввод.', 'danger')
         except Exception as e:
-            current_app.logger.error(f"ФИНАЛЬНЫЙ КРАХ (Гибрид): {e}")
-            flash('Критическая ошибка: Не удалось декодировать данные.', 'danger')
-            
-    # GET-запрос или ошибка валидации/декодирования
-    return render_template(
-        'route_prices_matrix.html', 
-        form=form, 
-        route=route, 
-        title=f'Редактирование цен: Шаг 3 ({route.route_name})'
-    )
+            current_app.logger.exception("DEBUG (PY): Общая ошибка при сохранении цен: %s", e)
+            flash('Произошла непредвиденная ошибка при сохранении цен.', 'danger')
+
+    # GET-запрос или невалидная форма — рендерим шаблон
+    return render_template('route_prices_matrix.html',
+                           form=form,
+                           route=route,
+                           title=f'Редактирование цен: Шаг 3 ({route.route_name})')
