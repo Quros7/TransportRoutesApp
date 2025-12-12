@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h2>{{ title }}</h2>
+    
+    <form method="POST" id="route-info-form">
+        {{ form.hidden_tag() }}
+
+        <h3>1. Основные параметры (Заголовок файла)</h3>
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                {{ form.region_code.label(class="form-label") }}
+                {{ form.region_code(class="form-control") }}
+                {% for error in form.region_code.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+            <div class="col-md-3 mb-3">
+                {{ form.carrier_id.label(class="form-label") }}
+                {{ form.carrier_id(class="form-control") }}
+                {% for error in form.carrier_id.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+            <div class="col-md-3 mb-3">
+                {{ form.unit_id.label(class="form-label") }}
+                {{ form.unit_id(class="form-control") }}
+                {% for error in form.unit_id.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+            <div class="col-md-3 mb-3">
+                {{ form.decimal_places.label(class="form-label") }}
+                {{ form.decimal_places(class="form-select") }}
+                {% for error in form.decimal_places.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+        </div>
+        
+        <hr>
+
+        <h3>2. Параметры маршрута (Строка R)</h3>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                {{ form.route_name.label(class="form-label") }}
+                {{ form.route_name(class="form-control") }}
+                {% for error in form.route_name.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+            <div class="col-md-3 mb-3">
+                {{ form.route_number.label(class="form-label") }}
+                {{ form.route_number(class="form-control") }}
+                {% for error in form.route_number.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+            <div class="col-md-3 mb-3">
+                {{ form.transport_type.label(class="form-label") }}
+                {{ form.transport_type(class="form-select") }}
+                {% for error in form.transport_type.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+        </div>
+
+        <hr>
+
+        <h3>3. Список тарифов (Строки тарифов)</h3>
+        <p class="text-muted small">
+            Коды оплаты необходимы для генерации строк тарифов (напр., <code>1;02;98</code>): Код 1 - метод оплаты (наличные, карта, P), Код 2 - ID льготы/багажа/т.п.
+        </p>
+
+        <div id="tariffs-container">
+            {# Рендеринг существующих тарифов #}
+            {% for tariff_form in form.tariffs %}
+                <div class="card mb-3 tariff-entry">
+                    <div class="card-body">
+                        <h5 class="card-title">Тариф {{ loop.index }}</h5> 
+                        {# Мы добавили #, чтобы убедиться, что Jinja2-заголовок не конфликтует, пока JS его не обновит #}
+                        
+                        {{ tariff_form.tariff_name.label(class="form-label") }}
+                        {{ tariff_form.tariff_name(class="form-control mb-3", placeholder="Название тарифа (напр., 'Полный', 'Льготный')") }}
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ tariff_form.payment_code_1.label(class="form-label") }}
+                                {{ tariff_form.payment_code_1(class="form-control", placeholder="Код 1 (напр., 02 или P)") }}
+                                {% for error in tariff_form.payment_code_1.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ tariff_form.payment_code_2.label(class="form-label") }}
+                                {{ tariff_form.payment_code_2(class="form-control", placeholder="Код 2 (напр., 98 или 89)") }}
+                                {% for error in tariff_form.payment_code_2.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+                            </div>
+                        </div>
+                        
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-tariff" onclick="removeTariffEntry(this)">Удалить тариф</button>
+                        {{ tariff_form.hidden_tag() }} 
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        
+        <button type="button" class="btn btn-sm btn-outline-primary mb-4" onclick="addTariffEntry()">
+            + Добавить тариф
+        </button>
+
+        <div class="mt-4">
+            {{ form.next_step(class="btn btn-primary") }}
+        </div>
+    </form>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // 1. Получаем значение основного токена CSRF, чтобы использовать его в динамических полях.
+    // Это значение берется из основного form.hidden_tag(), который находится в начале формы.
+    const csrf_token_value = document.querySelector('input[name="csrf_token"]').value;
+
+    // Шаблон для нового поля тарифа (КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ CSRF)
+    const tariffTemplate = `
+        <div class="card mb-3 tariff-entry">
+            <div class="card-body">
+                <h5 class="card-title">Тариф NEW_INDEX</h5>
+                
+                <label class="form-label">Название тарифа</label>
+                <input type="text" name="tariffs-NEW_INDEX-tariff_name" class="form-control mb-3" placeholder="Название тарифа (напр., 'Полный', 'Льготный')" required>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Код оплаты 1 (напр., 02 или P)</label>
+                        <input type="text" name="tariffs-NEW_INDEX-payment_code_1" class="form-control" placeholder="Код 1 (напр., 02 или P)" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Код оплаты 2 (ID льготы/багажа)</label>
+                        <input type="text" name="tariffs-NEW_INDEX-payment_code_2" class="form-control" placeholder="Код 2 (напр., 98 или 89)" required>
+                    </div>
+                </div>
+                
+                <button type="button" class="btn btn-sm btn-outline-danger remove-tariff" onclick="removeTariffEntry(this)">Удалить тариф</button>
+                
+                {# КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем скрытый токен CSRF с правильным именем и значением. #}
+                <input type="hidden" name="tariffs-NEW_INDEX-csrf_token" value="${csrf_token_value}" />
+            </div>
+        </div>
+    `;
+
+    /**
+     * Добавляет новое поле для ввода тарифа.
+     */
+    function addTariffEntry() {
+        const container = document.getElementById('tariffs-container');
+        const count = container.querySelectorAll('.tariff-entry').length;
+        
+        // Замена уникального индекса (NEW_INDEX)
+        let newHtml = tariffTemplate.replace(/NEW_INDEX/g, count);
+        
+        // Вставляем HTML
+        container.insertAdjacentHTML('beforeend', newHtml);
+        
+        // Пересчет всех заголовков после добавления
+        updateTariffHeaders();
+
+        // Обновляем видимость кнопок удаления
+        updateRemoveButtonsVisibility();
+    }
+
+    /**
+     * Удаляет поле тарифа и пересчитывает индексы.
+     * ЭТОТ ФУНКЦИОНАЛ ИСПРАВЛЕН
+     */
+    function removeTariffEntry(button) {
+        const container = document.getElementById('tariffs-container');
+        const entry = button.closest('.tariff-entry');
+        
+        // Проверка: Маршрут должен иметь хотя бы один тариф
+        if (container.querySelectorAll('.tariff-entry').length <= 1) {
+            alert("Маршрут должен иметь хотя бы один тариф.");
+            return;
+        }
+
+        if (entry) {
+            entry.remove();
+            
+            // КРИТИЧЕСКИЙ ШАГ: Пересчет индексов для Flask-WTF
+            container.querySelectorAll('.tariff-entry').forEach((entry, index) => {
+                // 1. Обновляем name атрибуты инпутов
+                entry.querySelectorAll('input').forEach(input => {
+                    if (input.name) {
+                        // Заменяем старый индекс на новый (tariffs-N-field_name)
+                        input.name = input.name.replace(/tariffs-\d+-/, `tariffs-${index}-`);
+                    }
+                });
+            });
+
+            // Обновление заголовков и кнопок после удаления
+            updateTariffHeaders();
+        }
+        updateRemoveButtonsVisibility();
+    }
+    
+    /**
+     * Новая функция для пересчета и обновления заголовков всех тарифов
+     * ИСПРАВЛЕНО: Убран артефакт #
+     */
+    function updateTariffHeaders() {
+        const container = document.getElementById('tariffs-container');
+        container.querySelectorAll('.tariff-entry').forEach((entry, index) => {
+            // Устанавливаем заголовок по порядковому номеру (индекс + 1)
+            entry.querySelector('h5.card-title').textContent = 'Тариф ' + (index + 1);
+        });
+    }
+
+    /**
+     * Скрывает кнопку удаления, если остался только один тариф.
+     */
+    function updateRemoveButtonsVisibility() {
+        const entries = document.querySelectorAll('.tariff-entry');
+        entries.forEach(entry => {
+            const removeButton = entry.querySelector('.remove-tariff');
+            if (removeButton) {
+                removeButton.style.display = entries.length > 1 ? 'inline-block' : 'none';
+            }
+        });
+    }
+
+    // Инициализация при загрузке страницы
+    window.onload = function() {
+        updateRemoveButtonsVisibility();
+        // Запуск обновления заголовков при загрузке, чтобы исправить Jinja2-заголовок
+        updateTariffHeaders(); 
+    };
+
+    // --- НОВЫЙ КОД ДЛЯ ПРЕДОТВРАЩЕНИЯ ДВОЙНОГО НАЖАТИЯ ---
+    document.getElementById('route-info-form').addEventListener('submit', function() {
+        // Отключаем основную кнопку отправки
+        const submitButton = document.querySelector('button[type="submit"]'); 
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Сохранение...'; // Опционально: показать индикатор
+        }
+    });
+
+</script>
+{% endblock %}

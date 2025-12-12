@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h2>{{ title }}</h2>
+    <p>Маршрут: <strong>{{ route.route_name }}</strong></p>
+    
+    <div class="alert alert-info">
+        Заполните цены для проезда из начальной остановки (строка) до конечной остановки (столбец) для каждого тарифа.
+        <br>
+        <strong>Внимание:</strong> Заполняется только верхний треугольник (прямое направление).
+    </div>
+
+    <form method="POST" id="price-matrix-form">
+        {{ form.hidden_tag() }}
+        
+        {# Скрытое поле, куда JavaScript поместит всю матрицу в виде JSON #}
+        {{ form.price_matrix_data(id='price-matrix-data') }}
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm price-matrix">
+                <thead>
+                    <tr>
+                        <th class="align-top text-center" style="min-width: 120px;">От / До</th>
+                        {% for stop in route.stops %}
+                            {# Исключаем первую колонку для визуального выравнивания (поскольку i < j) #}
+                            {% if loop.index > 0 %} 
+                                <th class="text-center">{{ stop.name }}</th>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {# i - Индекс начальной остановки (строка) #}
+                    {% for start_stop in route.stops %}
+                        {# 💥 ИСПРАВЛЕНИЕ: Сохраняем индекс i в переменную i до вложенного цикла #}
+                        {% set i = loop.index0 %}
+                        
+                        {# Исключаем последнюю остановку как начальную точку #}
+                        {% if not loop.last %}
+                            <tr>
+                                <th scope="row" class="table-light">От: {{ start_stop.name }} ({{ loop.index0 }})</th>
+                                
+                                {# j - Индекс конечной остановки (столбец) #}
+                                {% for end_stop in route.stops %}
+                                    {# {% set i = loop.parent.index0 %} #}
+                                    {% set j = loop.index0 %}
+                                    
+                                    {# Проверка, что j > i (движение только вперед) #}
+                                    {% if j > i %}
+                                        {# Ячейка для заполнения (i -> j) #}
+                                        <td data-start-index="{{ i }}" data-end-index="{{ j }}">
+                                            {% for tariff in route.tariffs %}
+                                                <div class="tariff-input-group mb-1">
+                                                    <label class="small text-muted mb-0">
+                                                        {{ tariff.name }}:
+                                                    </label>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.01" 
+                                                        min="0"
+                                                        class="form-control form-control-sm price-input"
+                                                        data-tariff-id="{{ tariff.id }}"
+                                                        
+                                                        {# Загрузка существующих данных #}
+                                                        {# Проверяем, существует ли цена в матрице (matrix[i][j]) #}
+                                                        {% set prices = route.price_matrix[i][j] if route.price_matrix and route.price_matrix[i] is defined and route.price_matrix[i][j] is defined else {} %}
+                                                        value="{{ prices[tariff.id|string] if tariff.id|string in prices else '' }}"
+                                                        
+                                                        placeholder="Цена"
+                                                    >
+                                                </div>
+                                            {% endfor %}
+                                        </td>
+                                    {% else %}
+                                        {# Ячейка не требуется (j <= i) #}
+                                        <td class="bg-light"></td>
+                                    {% endif %}
+                                {% endfor %}
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="mt-4">
+            {# При нажатии вызывается JS-функция, которая собирает данные и отправляет форму #}
+            {{ form.save_prices(class="btn btn-success", onclick="collectMatrixData()") }}
+            <a href="{{ url_for('route_list') }}" class="btn btn-secondary">Отмена</a>
+        </div>
+    </form>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    /**
+     * Собирает все данные из интерактивной матрицы цен, формирует JSON-структуру
+     * и помещает ее в скрытое поле 'price-matrix-data' перед отправкой формы.
+     */
+    function collectMatrixData() {
+        const stopsCount = {{ route.stops | length }};
+        
+        // --- DEBUG 1: Проверка количества остановок ---
+        console.log('DEBUG (JS): Количество остановок (stopsCount):', stopsCount);
+
+        // 1. Инициализация пустой матрицы (stopsCount x stopsCount)
+        // Все элементы по умолчанию 'null'
+        let matrix = [];
+        for (let i = 0; i < stopsCount; i++) {
+            // Создаем массив с пустыми значениями (null)
+            matrix[i] = new Array(stopsCount).fill(null);
+        }
+
+        // 2. Итерируемся по всем ячейкам таблицы, которые содержат поля ввода
+        const cells = document.querySelectorAll('.price-matrix td[data-start-index]');
+        
+        // --- DEBUG 2: Проверка, сколько ячеек найдено ---
+        console.log('DEBUG (JS): Найдено ячеек для обработки:', cells.length);
+
+        cells.forEach(cell => {
+            // Получаем индексы (i - строка, j - столбец)
+            const i = parseInt(cell.getAttribute('data-start-index'));
+            const j = parseInt(cell.getAttribute('data-end-index'));
+            
+            let priceData = {};
+            let hasPrice = false;
+
+            // 3. Для каждой ячейки собираем цены по всем тарифам
+            const inputs = cell.querySelectorAll('.price-input');
+            inputs.forEach(input => {
+                const tariffId = input.getAttribute('data-tariff-id');
+                let value = input.value.trim();
+                
+                let numericValue = null;
+
+                if (value !== '' && !isNaN(parseFloat(value))) {
+                    numericValue = parseFloat(parseFloat(value).toFixed(2)); // Округляем до 2 знаков
+                    if (numericValue > 0) {
+                        hasPrice = true;
+                    }
+                }
+                
+                // Сохраняем цену. В спецификации допускается пропуск,
+                // но для надежности хранения в нашей матрице лучше сохранять 0,
+                // если поле было пустым, но ячейка должна существовать.
+                // Если нет цены, ставим 0.
+                priceData[tariffId] = numericValue || 0; 
+            });
+
+            // 4. Помещаем словарь цен в соответствующее место в матрице
+            // Мы сохраняем ячейку, даже если все цены 0, чтобы сохранить структуру.
+            matrix[i][j] = priceData;
+
+            // --- DEBUG 3: Логируем данные каждой заполненной ячейки ---
+            // if (hasPrice) { 
+            //     console.log(`Ячейка [${i}][${j}] сохранена:`, priceData);
+            // }
+            // Мы будем полагаться на финальное логирование JSON
+        });
+
+        // --- DEBUG 4: Проверка итогового объекта перед сериализацией ---
+        console.log('DEBUG (JS): Итоговая матрица (объект JS):', matrix);
+
+        // 5. Сериализуем готовую матрицу в JSON-строку
+        const matrixJsonString = JSON.stringify(matrix);
+        
+        // --- DEBUG 5: Проверка итоговой JSON-строки ---
+        console.log('DEBUG (JS): Итоговая JSON-строка:', matrixJsonString);
+
+        // 6. Помещаем JSON-строку в скрытое поле формы
+        document.getElementById('price-matrix-data').value = matrixJsonString;
+        
+        // Убеждаемся, что поле не пустое, чтобы пройти валидатор DataRequired
+        // Валидный JSON для пустой матрицы: [[{}, {}, ...], ...] -> Длинная строка.
+        if (matrixJsonString.length > 5) {
+            console.log('DEBUG (JS): JSON-строка успешно записана и валидна. Отправка формы.');
+            return true; // Отправляем форму
+        } else {
+            // Этот блок не должен срабатывать, если stopsCount > 1
+            console.error("DEBUG (JS): Ошибка: JSON-строка слишком короткая (менее 5 символов). Вероятно, матрица пуста.");
+            alert("Матрица цен пуста или не была собрана.");
+            return false;
+        }
+    }
+</script>
+{% endblock %}

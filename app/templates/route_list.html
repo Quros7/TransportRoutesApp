@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Мои маршруты</h2>
+        {# 1. Кнопка создания нового маршрута: Изменена ссылка #}
+        <a href="{{ url_for('create_or_edit_route_info') }}" class="btn btn-success">
+            <i class="fas fa-plus"></i> Создать новый маршрут
+        </a>
+    </div>
+
+    {% if not routes %}
+        <div class="alert alert-info" role="alert">
+            У вас пока нет сохраненных маршрутов. Начните с создания первого!
+        </div>
+    {% else %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Название маршрута</th>
+                        <th scope="col">Перевозчик</th>
+                        <th scope="col">Тип транспорта</th>
+                        <th scope="col">Остановки</th>
+                        <th scope="col">Тарифы</th>
+                        <th scope="col" class="text-center" style="min-width: 250px;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for route in routes %}
+                        <tr>
+                            <th scope="row">{{ loop.index }}</th>
+                            <td>
+                                <strong>{{ route.route_name }}</strong>
+                            </td>
+                            <td>{{ route.carrier_info }}</td>
+                            <td>
+                                {# Выводим понятное название типа транспорта #}
+                                {% if route.transport_type == '0x02' %}Автобус (городской)
+                                {% elif route.transport_type == '0x20' %}Автобус (пригородный)
+                                {% else %}Код: {{ route.transport_type }}{% endif %}
+                            </td>
+                            <td>
+                                {{ route.stops | length if route.stops else 0 }}
+                            </td>
+                            <td>
+                                {{ route.tariffs | length if route.tariffs else 0 }}
+                            </td>
+                            <td class="text-center">
+                                {# 2. Кнопка для редактирования общей информации (Шаг 1): Изменена ссылка #}
+                                <a href="{{ url_for('create_or_edit_route_info', route_id=route.id) }}" 
+                                   class="btn btn-sm btn-outline-info me-2" 
+                                   data-bs-toggle="tooltip" title="Редактировать информацию">
+                                    <i class="fas fa-edit"></i> Info
+                                </a>
+                                
+                                {# Кнопка для редактирования остановок (Шаг 2) — ОСТАЕТСЯ ПРЕЖНЕЙ #}
+                                <a href="{{ url_for('edit_route_stops', route_id=route.id) }}" 
+                                   class="btn btn-sm btn-outline-warning me-2" 
+                                   data-bs-toggle="tooltip" title="Редактировать остановки">
+                                    <i class="fas fa-map-marker-alt"></i> Остановки
+                                </a>
+                                
+                                {# Кнопка для редактирования цен (Шаг 3) — ОСТАЕТСЯ ПРЕЖНЕЙ #}
+                                <a href="{{ url_for('edit_route_prices', route_id=route.id) }}" 
+                                   class="btn btn-sm btn-outline-danger me-2"
+                                   data-bs-toggle="tooltip" title="Редактировать матрицу цен">
+                                    <i class="fas fa-dollar-sign"></i> Цены
+                                </a>
+
+                                {# Кнопка генерации файла (Будущая реализация) #}
+                                <button type="button" 
+                                        class="btn btn-sm btn-primary"
+                                        data-bs-toggle="tooltip" title="Сформировать файл конфигурации">
+                                    <i class="fas fa-download"></i> Конфиг
+                                </button>
+                                
+                                {# TODO: Добавить кнопку Удалить (с подтверждением через модальное окно) #}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    {# Для корректной работы иконок FontAwesome и Bootstrap tooltips #}
+    <script>
+        // Инициализация всплывающих подсказок Bootstrap
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+          return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+    </script>
+{% endblock %}

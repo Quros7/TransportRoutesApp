@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h2>{{ title }}</h2>
+    
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <p class="text-muted">
+            Остановки нумеруются с 0, как в файле конфигурации. Остановка 0 должна иметь расстояние 0.00 км.
+        </p>
+
+        <div id="stops-container">
+            {% for stop_form in form.stops %}
+                <div class="card mb-3 stop-entry">
+                    <div class="card-body">
+                        {# ИСПРАВЛЕНИЕ 1: Нумерация с 0 #}
+                        <h5 class="card-title">Остановка {{ loop.index0 }}</h5> 
+                        
+                        <div class="row">
+                            <div class="col-md-9 mb-3">
+                                {{ stop_form.stop_name.label(class="form-label") }}
+                                {{ stop_form.stop_name(class="form-control", placeholder="Название остановки [ID]") }}
+                                {% for error in stop_form.stop_name.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                {{ stop_form.km_distance.label(class="form-label") }}
+                                
+                                {# ИСПРАВЛЕНИЕ 2: Запрет редактирования расстояния для Остановки 0 #}
+                                {% if loop.index0 == 0 %}
+                                    {{ stop_form.km_distance(class="form-control", placeholder="0.00", readonly=True) }}
+                                {% else %}
+                                    {{ stop_form.km_distance(class="form-control", placeholder="0.00") }}
+                                {% endif %}
+                                
+                                {% for error in stop_form.km_distance.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+                            </div>
+                        </div>
+                        
+                        {# Кнопка удаления, только если это не Остановка 0 #}
+                        {% if loop.index0 > 0 %}
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-stop" onclick="removeStopEntry(this)">Удалить остановку</button>
+                        {% endif %}
+                        {{ stop_form.hidden_tag() }} 
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        
+        {# ИСПРАВЛЕНИЕ ОШИБКИ 'multiple values for keyword argument name' #}
+        {{ form.add_stop(class="btn btn-secondary mb-4") }}
+
+        <div class="mt-4">
+            {{ form.next_step(class="btn btn-primary") }}
+        </div>
+    </form>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Шаблон для новой остановки
+    const stopTemplate = `
+        <div class="card mb-3 stop-entry">
+            <div class="card-body">
+                <h5 class="card-title">Остановка NEW_INDEX</h5>
+                
+                <div class="row">
+                    <div class="col-md-9 mb-3">
+                        <label class="form-label">Название остановки</label>
+                        <input type="text" name="stops-NEW_INDEX-stop_name" class="form-control" placeholder="Название остановки [ID]" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Расстояние (км от начальной точки)</label>
+                        {# Для новых остановок поле не read-only, но имеет значение 0.00 по умолчанию #}
+                        <input type="text" name="stops-NEW_INDEX-km_distance" class="form-control" placeholder="0.00" required value="0.00">
+                    </div>
+                </div>
+                
+                <button type="button" class="btn btn-sm btn-outline-danger remove-stop" onclick="removeStopEntry(this)">Удалить остановку</button>
+            </div>
+        </div>
+    `;
+
+    /**
+     * Добавляет новое поле для ввода остановки.
+     */
+    function addStopEntry() {
+        const container = document.getElementById('stops-container');
+        const count = container.querySelectorAll('.stop-entry').length;
+        
+        let newHtml = stopTemplate.replace(/NEW_INDEX/g, count);
+        container.insertAdjacentHTML('beforeend', newHtml);
+        
+        updateStopHeaders(); // Обновление заголовков и состояния полей
+    }
+
+    /**
+     * Удаляет поле остановки и пересчитывает индексы.
+     */
+    function removeStopEntry(button) {
+        const container = document.getElementById('stops-container');
+        const entry = button.closest('.stop-entry');
+        
+        const entries = container.querySelectorAll('.stop-entry');
+        const index = Array.from(entries).indexOf(entry);
+        
+        // Запрет на удаление Остановки 0
+        if (index === 0) {
+            alert("Начальную остановку (Остановку 0) удалить нельзя.");
+            return;
+        }
+
+        if (entry) {
+            entry.remove();
+            
+            // Пересчет индексов для Flask-WTF
+            container.querySelectorAll('.stop-entry').forEach((entry, idx) => {
+                entry.querySelectorAll('input').forEach(input => {
+                    if (input.name) {
+                        // Заменяем старый индекс на новый (stops-N-field_name)
+                        input.name = input.name.replace(/stops-\d+-/, `stops-${idx}-`);
+                    }
+                });
+            });
+
+            updateStopHeaders();
+        }
+    }
+    
+    /**
+     * Функция для пересчета и обновления заголовков всех остановок,
+     * а также для установки режима read-only для Остановки 0.
+     */
+    function updateStopHeaders() {
+        const container = document.getElementById('stops-container');
+        container.querySelectorAll('.stop-entry').forEach((entry, index) => {
+            // Устанавливаем заголовок по порядковому номеру (индекс 0, 1, 2...)
+            entry.querySelector('h5.card-title').textContent = 'Остановка ' + index;
+            
+            // Логика read-only и удаления
+            const removeButton = entry.querySelector('.remove-stop');
+            const kmInput = entry.querySelector('input[name*="km_distance"]');
+            
+            if (index === 0) {
+                // Остановка 0: Расстояние 0.00 и не удаляется
+                if (kmInput) {
+                    kmInput.setAttribute('readonly', true);
+                    kmInput.value = '0.00';
+                }
+                if (removeButton) removeButton.style.display = 'none';
+            } else {
+                // Остальные остановки: Можно редактировать и удалять
+                if (kmInput) kmInput.removeAttribute('readonly');
+                // Кнопка удаления рендерится только для index > 0 (см. Jinja-код)
+                if (removeButton) removeButton.style.display = 'inline-block'; 
+            }
+        });
+    }
+
+    // Инициализация при загрузке страницы
+    window.onload = updateStopHeaders;
+
+</script>
+{% endblock %}
