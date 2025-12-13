@@ -6,7 +6,8 @@
     <form method="POST">
         {{ form.hidden_tag() }}
         <p class="text-muted">
-            Остановки нумеруются с 0, как в файле конфигурации. Остановка 0 должна иметь расстояние 0.00 км.
+            Остановки нумеруются с 0. Остановка 0 должна иметь расстояние 0.00 км.
+            <br>Расстояния (км) указываются от начальной точки маршрута (Остановка 0) до начала очередной зоны.
         </p>
 
         <div id="stops-container">
@@ -28,15 +29,15 @@
                                 {# ИСПРАВЛЕНИЕ 2: Запрет редактирования расстояния для Остановки 0 #}
                                 {% set base_attrs = {
                                     'class': 'form-control distance-input',
-                                    'placeholder': '0.00',
+                                    'placeholder': '0,00',
                                     'data-index': loop.index0
                                 } %}
 
                                 {% if loop.index0 == 0 %}
                                     {# Создаем полный словарь, включая readonly #}
                                     {% set final_attrs = base_attrs %}
-                                    {# Для старых версий Jinja, где нет combine, нам нужно "объединять" атрибуты вручную.
-                                    Используем метод, который всегда работает: переопределяем словарь. #}
+                                    {# Для старых версий Jinja, где нет combine, нам нужно "объединять" атрибуты вручную. #}
+                                    {# Используем метод, который всегда работает: переопределяем словарь. #}
                                     {% set final_attrs = dict(final_attrs, readonly=True) %}
                                 {% else %}
                                     {% set final_attrs = base_attrs %}
@@ -83,7 +84,7 @@
                         <input type="text" name="stops-NEW_INDEX-stop_name" class="form-control" placeholder="Название остановки [ID]" required>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Расстояние (км от начальной точки)</label>
+                        <label class="form-label">Расстояние до зоны (км)</label>
                         {# ✅ Добавляем класс distance-input и data-index #}
                         <input type="text" 
                             name="stops-NEW_INDEX-km_distance" 
