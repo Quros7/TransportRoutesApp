@@ -75,7 +75,7 @@ def route_list():
     # return render_template('route_list.html', routes=routes)
     routes = Route.query.filter_by(user_id=current_user.id).all()
     
-    # 💥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Явно передаем CSRF-токен в шаблон
+    # Явно передаем CSRF-токен в шаблон
     # Используем функцию generate_csrf(), чтобы получить строковое значение токена.
     csrf_token = generate_csrf()
     
@@ -113,7 +113,7 @@ def route_list():
 
 
 # --- Создание ИЛИ Редактирование Общей информации (Шаг 1) ---
-# route_id теперь необязателен. Если он есть, мы редактируем.
+# route_id необязателен. Если он есть, мы редактируем.
 @app.route('/route/edit/info', defaults={'route_id': None}, methods=['GET', 'POST'])
 @app.route('/route/edit/info/<int:route_id>', methods=['GET', 'POST'])
 @login_required
@@ -150,13 +150,13 @@ def create_or_edit_route_info(route_id):
 
     if form.validate_on_submit():
         
-        # 1. Сбор данных тарифов, включая новые коды
+        # 1. Сбор данных тарифов, используя имена полей формы в качестве ключей JSON
         tariff_data = [
             {
-                "id": i + 1,
-                "name": t.tariff_name.data,
-                "code1": t.payment_code_1.data, 
-                "code2": t.payment_code_2.data
+                "id": i + 1, # Добавляем ID как дополнительный ключ
+                "tariff_name": t.tariff_name.data,
+                "payment_code_1": t.payment_code_1.data, 
+                "payment_code_2": t.payment_code_2.data
             } 
             for i, t in enumerate(form.tariffs.entries)
         ]

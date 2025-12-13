@@ -112,7 +112,7 @@ class RouteInfoForm(FlaskForm):
     region_code = StringField('Код региона (напр., 66)', validators=[DataRequired(), Length(min=1, max=5), Regexp(r'^\d+$', message='Код должен содержать только цифры.')])
     
     # Поле для точности после запятой (обычно 2)
-    decimal_places = SelectField('Кол-во знаков после запятой (для цен)', choices=[('0', '0'), ('1', '1'), ('2', '2'), ('3', '3')], validators=[DataRequired()])
+    decimal_places = SelectField('Кол-во знаков после запятой (для цен)', choices=[('0', '0'), ('1', '1'), ('2', '2')], validators=[DataRequired()])
     
     transport_type = SelectField('Тип транспорта', choices=[
         ('0x01', 'Метрополитен (01)'),

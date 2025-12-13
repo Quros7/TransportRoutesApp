@@ -18,9 +18,9 @@
             <table class="table table-striped table-hover align-middle">
                 <thead>
                     <tr>
-                        <th scope="col">#</th>
+                        <th scope="col">№</th>
                         <th scope="col">Название маршрута</th>
-                        <th scope="col">Перевозчик</th>
+                        <th scope="col">Перевозчик (ID)</th>
                         <th scope="col">Тип транспорта</th>
                         <th scope="col">Остановки</th>
                         <th scope="col">Тарифы</th>
@@ -47,7 +47,7 @@
                             <td>
                                 {{ route.tariffs | length if route.tariffs else 0 }}
                             </td>
-                            <td class="d-flex justify-content-center align-items-center">
+                            <td class="d-flex justify-content-center align-items-center"> 
                                 {# 2. Кнопка для редактирования общей информации (Шаг 1) #}
                                 <a href="{{ url_for('create_or_edit_route_info', route_id=route.id) }}" 
                                    class="btn btn-sm btn-outline-info me-2" 
