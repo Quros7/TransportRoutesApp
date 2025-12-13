@@ -205,11 +205,12 @@ def create_or_edit_route_info(route_id):
     # --- GET-запрос (или валидация не пройдена) ---
     
     else:
-        # !!! ВРЕМЕННЫЙ КОД ДЛЯ ОТЛАДКИ !!!
-        app.logger.error("--- ОШИБКА ВАЛИДАЦИИ ФОРМЫ ---")
-        app.logger.error(form.errors)
-        app.logger.error("------------------------------")
-        # !!! КОНЕЦ ВРЕМЕННОГО КОДА !!!
+        pass
+        # # !!! ВРЕМЕННЫЙ КОД ДЛЯ ОТЛАДКИ !!!
+        # app.logger.error("--- ОШИБКА ВАЛИДАЦИИ ФОРМЫ ---")
+        # app.logger.error(form.errors)
+        # app.logger.error("------------------------------")
+        # # !!! КОНЕЦ ВРЕМЕННОГО КОДА !!!
 
     # Устанавливаем заголовок страницы
     title = 'Создание маршрута: Шаг 1' if route is None else f'Редактирование маршрута: {route.route_name}'
