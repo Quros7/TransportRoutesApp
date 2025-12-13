@@ -104,9 +104,6 @@
      * предотвращает стандартный submit → отправляет форму вручную.
      */
     function collectMatrixData(event) {
-        console.log("FUNCTION CALLED!");
-        alert("called");
-
         // Блокируем мгновенную отправку submit-кнопкой WTForms
         if (event) {
             event.preventDefault();

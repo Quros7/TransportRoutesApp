@@ -6,7 +6,7 @@ from flask_login import current_user, login_user, logout_user, login_required
 import sqlalchemy as sa
 import json
 from urllib.parse import urlsplit, parse_qs
-from flask_wtf.csrf import validate_csrf
+from flask_wtf.csrf import validate_csrf, generate_csrf
 from wtforms import ValidationError
 
 
@@ -71,8 +71,15 @@ def user(username):
 @app.route('/routes')
 @login_required
 def route_list():
+    # routes = Route.query.filter_by(user_id=current_user.id).all()
+    # return render_template('route_list.html', routes=routes)
     routes = Route.query.filter_by(user_id=current_user.id).all()
-    return render_template('route_list.html', routes=routes)
+    
+    # 💥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Явно передаем CSRF-токен в шаблон
+    # Используем функцию generate_csrf(), чтобы получить строковое значение токена.
+    csrf_token = generate_csrf()
+    
+    return render_template('route_list.html', routes=routes, csrf_token=csrf_token)
 
 
 # # --- Создание маршрута (Этап 1: Общая информация и Тарифы) ---
@@ -294,6 +301,7 @@ def edit_route_stops(route_id):
     return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
 
 
+# --- Форма с ценами за каждый отрезок пути (Этап 3) ---
 @app.route('/route/edit/<int:route_id>/prices', methods=['GET', 'POST'])
 @login_required
 def edit_route_prices(route_id):
@@ -389,3 +397,33 @@ def edit_route_prices(route_id):
                            form=form,
                            route=route,
                            title=f'Редактирование цен: Шаг 3 ({route.route_name})')
+
+
+# --- Удаление маршрута из списка ---
+@app.route('/route/delete/<int:route_id>', methods=['POST'])
+@login_required
+def delete_route(route_id):
+    # Используем db.session.get() для безопасного извлечения маршрута
+    route = db.session.get(Route, route_id)
+    
+    # 1. Проверка существования маршрута
+    if route is None:
+        flash('Маршрут не найден.', 'danger')
+        return redirect(url_for('route_list'))
+
+    # 2. Проверка прав: Убедимся, что пользователь удаляет только свои маршруты
+    if route.user_id != current_user.id:
+        flash('У вас нет прав для удаления этого маршрута.', 'danger')
+        return redirect(url_for('route_list'))
+
+    # 3. Удаление из базы данных
+    try:
+        db.session.delete(route)
+        db.session.commit()
+        flash(f'Маршрут "{route.route_name}" успешно удален.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Ошибка при удалении маршрута {route_id}: {e}")
+        flash('Произошла ошибка при удалении маршрута.', 'danger')
+
+    return redirect(url_for('route_list'))
