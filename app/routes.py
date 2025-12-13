@@ -280,9 +280,12 @@ def edit_route_stops(route_id):
                 except (TypeError, ValueError):
                     km_value = 0.00 # Fallback, хотя InputRequired должен предотвратить это
 
+                # Форматируем float в строку "X.XX" перед сохранением в JSON
+                km_value_str = f"{km_value:.2f}"
+
                 stop_data.append({
                     'name': stop_entry.stop_name.data,
-                    'km': km_value 
+                    'km': km_value_str # <-- Теперь в JSON будет строка "0.00", "1.00", "2.00"
                 })
 
             if route is not None:
@@ -308,10 +311,17 @@ def edit_route_stops(route_id):
         # Очищаем FieldList перед заполнением, чтобы избежать дублирования
         form.stops.entries = [] 
         for stop_data in route.stops:
+            # Преобразуем строку 'km' из БД обратно в float для формы
+            try:
+                km_for_form = float(stop_data['km'])
+            except (TypeError, ValueError):
+                # Если по какой-то причине значение некорректно, ставим 0.0
+                km_for_form = 0.0
+
             # При инициализации формы km_distance лучше передавать как str или float, 
             # если он был сохранен как float, но DecimalField справится с float.
             form.stops.append_entry(
-                {'stop_name': stop_data['name'], 'km_distance': stop_data['km']}
+                {'stop_name': stop_data['name'], 'km_distance': km_for_form}
             )
             
     # 3. РЕНДЕРИНГ ШАБЛОНА

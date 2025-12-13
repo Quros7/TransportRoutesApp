@@ -26,11 +26,24 @@
                                 {{ stop_form.km_distance.label(class="form-label") }}
                                 
                                 {# ИСПРАВЛЕНИЕ 2: Запрет редактирования расстояния для Остановки 0 #}
+                                {% set base_attrs = {
+                                    'class': 'form-control distance-input',
+                                    'placeholder': '0.00',
+                                    'data-index': loop.index0
+                                } %}
+
                                 {% if loop.index0 == 0 %}
-                                    {{ stop_form.km_distance(class="form-control", placeholder="0.00", readonly=True) }}
+                                    {# Создаем полный словарь, включая readonly #}
+                                    {% set final_attrs = base_attrs %}
+                                    {# Для старых версий Jinja, где нет combine, нам нужно "объединять" атрибуты вручную.
+                                    Используем метод, который всегда работает: переопределяем словарь. #}
+                                    {% set final_attrs = dict(final_attrs, readonly=True) %}
                                 {% else %}
-                                    {{ stop_form.km_distance(class="form-control", placeholder="0.00") }}
+                                    {% set final_attrs = base_attrs %}
                                 {% endif %}
+
+                                {# Теперь вызываем функцию только с одним словарем аргументов #}
+                                {{ stop_form.km_distance(**final_attrs) }}
                                 
                                 {% for error in stop_form.km_distance.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
                             </div>
@@ -71,8 +84,14 @@
                     </div>
                     <div class="col-md-3 mb-3">
                         <label class="form-label">Расстояние (км от начальной точки)</label>
-                        {# Для новых остановок поле не read-only, но имеет значение 0.00 по умолчанию #}
-                        <input type="text" name="stops-NEW_INDEX-km_distance" class="form-control" placeholder="0.00" required value="0.00">
+                        {# ✅ Добавляем класс distance-input и data-index #}
+                        <input type="text" 
+                            name="stops-NEW_INDEX-km_distance" 
+                            class="form-control distance-input" 
+                            placeholder="0.00" 
+                            required 
+                            value="0.00"
+                            data-index="NEW_INDEX" >
                     </div>
                 </div>
                 
@@ -92,6 +111,7 @@
         container.insertAdjacentHTML('beforeend', newHtml);
         
         updateStopHeaders(); // Обновление заголовков и состояния полей
+        initDistanceFormatters(); // ✅ Добавляем обработчики к новой остановке
     }
 
     /**
@@ -156,6 +176,70 @@
             }
         });
     }
+
+    // --- НОВЫЙ КОД ФОРМАТИРОВАНИЯ ---
+
+    /**
+     * Форматирует входное значение расстояния:
+     * 1. Заменяет запятую на точку.
+     * 2. Парсит число и приводит его к формату N.DD (два знака после разделителя).
+     * 3. Обеспечивает 0.00 для первой остановки.
+     * @param {HTMLElement} inputElement - Поле ввода.
+     */
+    function formatDistance(inputElement) {
+        let value = inputElement.value.trim();
+        
+        // 1. Заменяем запятую на точку для стандартизации
+        value = value.replace(/,/g, '.');
+
+        // Парсим число
+        let num = parseFloat(value);
+        const index = inputElement.dataset.index;
+
+        // Если введено некорректное число, просто выходим.
+        if (isNaN(num)) {
+            if (index !== '0') {
+                 inputElement.value = ''; // Очищаем некорректный ввод (кроме 0-й остановки)
+            }
+            return; 
+        }
+
+        // 2. Установка 0.00 для первой остановки, если пользователь попытался что-то ввести
+        if (index === '0') {
+            num = 0.00;
+        }
+
+        // 3. Форматируем число до двух знаков после точки
+        // Ограничиваем максимальное значение 99.99
+        if (num > 99.99) {
+            num = 99.99;
+        }
+        
+        let formattedValue = num.toFixed(2);
+        
+        // Устанавливаем отформатированное значение обратно в поле
+        inputElement.value = formattedValue;
+    }
+
+    /**
+     * Инициализирует обработчики событий для всех полей расстояния.
+     */
+    function initDistanceFormatters() {
+        // Находим все поля ввода расстояния по классу
+        const distanceInputs = document.querySelectorAll('.distance-input');
+
+        distanceInputs.forEach(input => {
+            // Применяем форматирование при потере фокуса (blur)
+            input.addEventListener('blur', function() {
+                formatDistance(this);
+            });
+            
+            // Применяем форматирование при загрузке (если в данных не N.DD)
+            formatDistance(input); 
+        });
+    }
+
+    // --- КОНЕЦ НОВОГО КОДА ФОРМАТИРОВАНИЯ ---
 
     // --- НАЧАЛО НОВОГО КОДА ВАЛИДАЦИИ ---
 
@@ -261,7 +345,11 @@
     // --- КОНЕЦ НОВОГО КОДА ВАЛИДАЦИИ ---
 
     // Инициализация при загрузке страницы
-    window.onload = updateStopHeaders;
+    window.onload = function() {
+        updateStopHeaders();
+        initDistanceFormatters(); // Инициализация форматирования для существующих полей
+    };
+
 
 </script>
 {% endblock %}
