@@ -35,26 +35,51 @@ class RegistrationForm(FlaskForm):
             raise ValidationError('Этот email адрес уже занят.')
 
 
-# --- Подформа для ввода одного тарифа (Обновлена) ---
-class TariffForm(FlaskForm):
+# # --- Подформа для ввода одного тарифа ---
+# class TariffForm(FlaskForm):
+#     tariff_name = StringField('Название тарифа', validators=[DataRequired(), Length(max=50)])
+    
+#     # НОВЫЕ ПОЛЯ для кодов оплаты в файле конфигурации:
+    
+#     # Поле 1: Соответствует колонке 2 строки тарифа (напр., '02' или 'P')
+#     # Используем Regexp, чтобы ограничить ввод только цифрами или 'P'
+#     payment_code_1 = StringField('Код оплаты 1 (напр., 02, P)', validators=[
+#         DataRequired(),
+#         Length(min=1, max=3),
+#         Regexp(r'^[0-9A-Z]+$', message='Допускаются только цифры или латинские буквы (P)')
+#     ])
+    
+#     # Поле 2: Соответствует колонке 3 строки тарифа (напр., '98' или '89')
+#     # Это ID типа льготы/багажа/наличной оплаты.
+#     payment_code_2 = StringField('Код оплаты 2 (ID льготы/багажа)', validators=[
+#         DataRequired(),
+#         Length(max=3),
+#         Regexp(r'^[0-9]+$', message='Допускаются только цифры.')
+#     ])
+
+
+# --- Подформа для ввода одной Тарифной Таблицы (Строка Tabs) ---
+class TariffTableEntryForm(FlaskForm):
+    # 1. Название тарифа (для Шага 3 и отображения)
     tariff_name = StringField('Название тарифа', validators=[DataRequired(), Length(max=50)])
-    
-    # НОВЫЕ ПОЛЯ для кодов оплаты в файле конфигурации:
-    
-    # Поле 1: Соответствует колонке 2 строки тарифа (напр., '02' или 'P')
-    # Используем Regexp, чтобы ограничить ввод только цифрами или 'P'
-    payment_code_1 = StringField('Код оплаты 1 (напр., 02, P)', validators=[
+
+    # 2. Тип таблицы (Стартовый код)
+    # 02 для первой таблицы, P/T/F для остальных.
+    # Мы используем StringField и Regexp для строгого контроля, поскольку это либо '02', либо 'P', 'T', 'F'.
+    table_type_code = StringField('Тип/Код Таблицы (02/P/T/F)', validators=[
         DataRequired(),
-        Length(min=1, max=3),
-        Regexp(r'^[0-9A-Z]+$', message='Допускаются только цифры или латинские буквы (P)')
+        Length(min=1, max=2),
+        Regexp(r'^(02|[PTF])$', 
+               message='Допускается только "02" (для первой таблицы), "P", "T" или "F".')
     ])
     
-    # Поле 2: Соответствует колонке 3 строки тарифа (напр., '98' или '89')
-    # Это ID типа льготы/багажа/наличной оплаты.
-    payment_code_2 = StringField('Код оплаты 2 (ID льготы/багажа)', validators=[
+    # 3. Серии SS (список кодов)
+    # Включает валидацию, что это список чисел, разделенных ';'.
+    ss_series_codes = StringField('Коды серий SS (через ";")', validators=[
         DataRequired(),
-        Length(max=3),
-        Regexp(r'^[0-9]+$', message='Допускаются только цифры.')
+        # ИСПРАВЛЕННОЕ РЕГУЛЯРНОЕ ВЫРАЖЕНИЕ
+        Regexp(r'^(\d{2}|[A-Z])(;(\d{2}|[A-Z]))*$', 
+               message='Введите коды серий SS через ";". Каждая серия должна быть 2-значным числом (или буквенным кодом).')
     ])
 
 
@@ -99,12 +124,40 @@ class StopForm(FlaskForm):
             )
 
 
-# 1. Форма для Общей информации и Тарифов (Обновлена)
+# # 1. Форма для Общей информации и Тарифов (Обновлена)
+# class RouteInfoForm(FlaskForm):
+#     route_name = StringField('Название маршрута', validators=[DataRequired(), Length(max=128)])
+    
+#     # НОВЫЕ ПОЛЯ для заголовочной строки файла конфигурации:
+#     # 66;7012;0001;250416;2
+    
+#     carrier_id = StringField('ID Перевозчика (напр., 7012)', validators=[DataRequired(), Length(min=1, max=10), Regexp(r'^\d+$', message='ID должен содержать только цифры.')])
+#     unit_id = StringField('ID Подразделения (напр., 0001)', validators=[DataRequired(), Length(min=1, max=10), Regexp(r'^\d+$', message='ID должен содержать только цифры.')])
+#     route_number = StringField('Номер маршрута (напр., 854)', validators=[DataRequired(), Length(min=1, max=10), Regexp(r'^\d+$', message='Номер должен содержать только цифры.')])
+#     region_code = StringField('Код региона (напр., 66)', validators=[DataRequired(), Length(min=1, max=5), Regexp(r'^\d+$', message='Код должен содержать только цифры.')])
+    
+#     # Поле для точности после запятой (обычно 2)
+#     decimal_places = SelectField('Кол-во знаков после запятой (для цен)', choices=[('0', '0'), ('1', '1'), ('2', '2')], validators=[DataRequired()])
+    
+#     transport_type = SelectField('Тип транспорта', choices=[
+#         ('0x01', 'Метрополитен (01)'),
+#         ('0x02', 'Автобус (городской) (02)'), # Используется 02 в файле
+#         ('0x20', 'Автобус (пригородный) (20)'),
+#         ('0x40', 'Автобус (междугородний) (40)'),
+#         ('0x04', 'Троллейбус (04)'),
+#         ('0x08', 'Трамвай (08)'),
+#         ('0x10', 'Маршрутное такси (10)'),
+#         ('0x80', 'Поезд (пригородный) (80)'),
+#     ], validators=[DataRequired()])
+    
+#     tariffs = FieldList(FormField(TariffForm), min_entries=1, label='Список тарифов')
+    
+#     next_step = SubmitField('Сохранить и перейти к списку остановок')
+
+
+# 1. Форма для Общей информации (Шаг 1)
 class RouteInfoForm(FlaskForm):
     route_name = StringField('Название маршрута', validators=[DataRequired(), Length(max=128)])
-    
-    # НОВЫЕ ПОЛЯ для заголовочной строки файла конфигурации:
-    # 66;7012;0001;250416;2
     
     carrier_id = StringField('ID Перевозчика (напр., 7012)', validators=[DataRequired(), Length(min=1, max=10), Regexp(r'^\d+$', message='ID должен содержать только цифры.')])
     unit_id = StringField('ID Подразделения (напр., 0001)', validators=[DataRequired(), Length(min=1, max=10), Regexp(r'^\d+$', message='ID должен содержать только цифры.')])
@@ -125,12 +178,62 @@ class RouteInfoForm(FlaskForm):
         ('0x80', 'Поезд (пригородный) (80)'),
     ], validators=[DataRequired()])
     
-    tariffs = FieldList(FormField(TariffForm), min_entries=1, label='Список тарифов')
+    # Теперь это Тарифные таблицы (FieldList)
+    tariff_tables = FieldList(
+        FormField(TariffTableEntryForm), 
+        min_entries=1, 
+        max_entries=15, # <-- Максимальное количество 15 таблиц
+        label='Тарифные Таблицы (TabN)'
+    )
     
     next_step = SubmitField('Сохранить и перейти к списку остановок')
 
 
-# 2. Форма для управления Остановками (Отрезками)
+    def validate_tariff_tables(self, field):
+        """Проверяет соблюдение правил спецификации для тарифных таблиц (Tabs)."""
+        
+        all_ss_codes = set()
+        
+        for i, entry in enumerate(field.entries):
+            form_data = entry.form
+            
+            # Парсим строку серий SS
+            ss_codes = [c.strip() for c in form_data.ss_series_codes.data.split(';') if c.strip()]
+
+            # 1. Правила для Таблицы 1 (i == 0)
+            if i == 0:
+                if form_data.table_type_code.data != '02':
+                    raise ValidationError('Таблица 1 должна начинаться с кода "02".')
+                
+                # Проверяем, что список серий SS не пуст, т.к. "02" уже был в TableTypeCode
+                if not ss_codes:
+                    raise ValidationError('Таблица 1 должна содержать серии SS после "02".')
+            
+            # 2. Правила для Таблиц > 1 (i > 0)
+            else:
+                if form_data.table_type_code.data not in ['P', 'T', 'F']:
+                    raise ValidationError(f'Таблица {i+1} должна иметь тип "P", "T" или "F".')
+            
+            # 3. Проверка уникальности серий SS
+            # Важно: В спецификации код '02' идет ПЕРВЫМ значением SS в первой строке.
+            # Если мы используем его как table_type_code, мы не должны проверять его здесь.
+            # Но если table_type_code это P/T/F, то P/T/F не входит в ss_codes.
+            
+            # Мы собираем коды SS из полей "ss_series_codes" для всех таблиц:
+            for code in ss_codes:
+                if code in all_ss_codes:
+                    # Указываем, что конфликт возник в таблице i+1
+                    raise ValidationError(
+                        f'Серия SS "{code}" в Таблице {i+1} уже присутствует в другой таблице. '
+                        'Один номер серии может быть только в одной строке блока Tabs.'
+                    )
+                all_ss_codes.add(code)
+                
+            # 4. Дополнительная проверка: Если код = 02, его не должно быть в других таблицах
+            # Этот код не нужен, если мы уже проверили уникальность всех ss_codes.
+
+
+# 2. Форма для управления Остановками (Отрезками) (Шаг 2)
 class RouteStopsForm(FlaskForm):
     # Список для динамического добавления/удаления остановок
     stops = FieldList(FormField(StopForm), min_entries=2, label='Остановки')
@@ -187,7 +290,7 @@ class RouteStopsForm(FlaskForm):
             previous_km = current_km_decimal
 
 
-# 3. Форма для ввода Цен (Матрица)
+# 3. Форма для ввода Цен (Матрица) (Шаг 3)
 # Эта форма будет использоваться для валидации ID маршрута и получения 
 # всей структуры матрицы цен, собранной фронтендом в JSON-формате.
 class RoutePricesForm(FlaskForm):

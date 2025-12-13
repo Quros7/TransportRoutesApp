@@ -51,23 +51,24 @@
                                     {% if j > i %}
                                         {# Ячейка для заполнения (i -> j) #}
                                         <td data-start-index="{{ i }}" data-end-index="{{ j }}">
-                                            {% for tariff in route.tariffs %}
-                                                {% set tariff_id = tariff.id %}
+                                            {% for tariff_table in route.tariff_tables %}
+                                                {% set tariff_id = tariff_table.tab_number %} {# Используем TabN как ID (1, 2, 3...) #}
+                                                
                                                 <div class="tariff-input-group mb-1">
                                                     <label class="small text-muted mb-0">
-                                                        {{ tariff.tariff_name }}:
+                                                        {{ tariff_table.tariff_name }}:
                                                     </label>
                                                     <input 
                                                         type="number" 
                                                         step="0.01" 
                                                         min="0"
                                                         class="form-control form-control-sm price-input"
-                                                        data-tariff-id="{{ tariff.id }}"
+                                                        data-tariff-id="{{ tariff_id }}"
                                                         
                                                         {# Загрузка существующих данных #}
                                                         {# Проверяем, существует ли цена в матрице (matrix[i][j]) #}
                                                         {% set prices = route.price_matrix[i][j] if route.price_matrix and route.price_matrix[i] is defined and route.price_matrix[i][j] is defined else {} %}
-                                                        value="{{ prices[tariff.id|string] if tariff.id|string in prices else '' }}"
+                                                        value="{{ prices[tariff_id|string] if tariff_id|string in prices else '' }}"
                                                         
                                                         placeholder="Цена"
                                                     >

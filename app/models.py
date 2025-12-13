@@ -45,7 +45,7 @@ class Route(db.Model):
     decimal_places: so.Mapped[str] = so.mapped_column(sa.String(1)) # 0, 1, 2, 3
     
     # JSON-поля
-    tariffs: so.Mapped[List] = so.mapped_column(JSON)
+    tariff_tables = db.Column(db.JSON, default=list)
     stops: so.Mapped[List] = so.mapped_column(JSON) 
     price_matrix: so.Mapped[List] = so.mapped_column(JSON)
 

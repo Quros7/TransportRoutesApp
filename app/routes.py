@@ -139,10 +139,10 @@ def create_or_edit_route_info(route_id):
         # obj=route загружает все скалярные поля (route_name, carrier_id и т.д.)
         # Примечание: data=dict(tariffs=route.tariffs) необходим для корректной загрузки
         # FieldList с подформами (TariffForm), хранящимися в JSON.
-        form = RouteInfoForm(obj=route, data=dict(tariffs=route.tariffs))
+        form = RouteInfoForm(obj=route, data=dict(tariff_tables=route.tariff_tables))
         
         # Позволяем Flask-WTF работать с динамически удаленными/добавленными полями
-        form.tariffs.min_entries = 0
+        form.tariff_tables.min_entries = 0
         
     else:
         # --- РЕЖИМ СОЗДАНИЯ ---
@@ -150,16 +150,32 @@ def create_or_edit_route_info(route_id):
 
     if form.validate_on_submit():
         
-        # 1. Сбор данных тарифов, используя имена полей формы в качестве ключей JSON
-        tariff_data = [
-            {
-                "id": i + 1, # Добавляем ID как дополнительный ключ
-                "tariff_name": t.tariff_name.data,
-                "payment_code_1": t.payment_code_1.data, 
-                "payment_code_2": t.payment_code_2.data
-            } 
-            for i, t in enumerate(form.tariffs.entries)
-        ]
+        # 1. Сбор данных тарифных таблиц
+        tariff_tables_data = []
+        for i, t in enumerate(form.tariff_tables.entries):
+            
+            # 1. Получаем строку, которую ввел пользователь
+            raw_ss_codes_string = t.form.ss_series_codes.data
+            # 2. Парсим строку серий SS
+            ss_codes_list = [c.strip() for c in raw_ss_codes_string.split(';') if c.strip()]
+            
+            table_entry = {
+                # Номер таблицы (TabN)
+                "tab_number": i + 1, 
+                
+                # Название тарифа (для Шага 3 и отображения)
+                "tariff_name": t.form.tariff_name.data,
+                
+                # Тип таблицы (Стартовый код: '02', 'P', 'T', 'F')
+                "table_type_code": t.form.table_type_code.data,
+                
+                # Коды серий SS (список значений, без стартового кода)
+                "ss_series_codes": raw_ss_codes_string,
+
+                # Сохраняем распарсенный список под другим именем (опционально, но полезно).
+                "parsed_ss_codes_list": ss_codes_list
+            }
+            tariff_tables_data.append(table_entry)
         
         # 2. Общие данные для сохранения
         data_to_save = {
@@ -170,7 +186,7 @@ def create_or_edit_route_info(route_id):
             'route_number': form.route_number.data,
             'region_code': form.region_code.data,
             'decimal_places': form.decimal_places.data,
-            'tariffs': tariff_data # Сохраняем как JSON
+            'tariff_tables': tariff_tables_data # Сохраняем как JSON
         }
         
         if route is None:
