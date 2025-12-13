@@ -11,6 +11,8 @@
           crossorigin="anonymous">
     {# Иконки Font Awesome #}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    {# Собственный style.css файл #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     
     {# Заголовок страницы #}
     {% if title %}
@@ -83,13 +85,32 @@
         {% block content %}{% endblock %}
         
     </div> 
-    {# 5. Bootstrap JS (обязательно для Navbar, Dropdowns, Modals и т.д.) #}
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" 
-            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" 
-            crossorigin="anonymous"></script>
+    {# здесь был скрипт bootstrap #}
 
     {# 6. Блок для вставки вашего JavaScript кода #}
-    {% block scripts %}{% endblock %}
+    {% block scripts %}
+        {# 5. Bootstrap JS (обязательно для Navbar, Dropdowns, Modals и т.д.) #}
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" 
+                integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" 
+                crossorigin="anonymous"></script>
+        <script>
+            // Универсальная функция для переключения видимости пароля
+            function togglePasswordVisibility(fieldId, button) {
+                const passwordField = document.getElementById(fieldId);
+                
+                // Проверяем текущий тип и переключаем
+                if (passwordField.type === 'password') {
+                    passwordField.type = 'text';
+                    button.textContent = '🙈'; // Иконка "Скрыть"
+                    button.setAttribute('aria-label', 'Скрыть пароль');
+                } else {
+                    passwordField.type = 'password';
+                    button.textContent = '👁️'; // Иконка "Показать"
+                    button.setAttribute('aria-label', 'Показать пароль');
+                }
+            }
+        </script>
+    {% endblock %}
 
 </body>
 </html>

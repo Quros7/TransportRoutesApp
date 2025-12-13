@@ -1,0 +1,19 @@
+/* CSS для размещения поля и кнопки в одну линию */
+.password-toggle-container {
+    /* Только flexbox для расположения */
+    display: flex; 
+    align-items: center;
+}
+
+.password-toggle-container input[type="password"],
+.password-toggle-container input[type="text"] {
+    /* Только отступ */
+    flex-grow: 1; 
+    margin-right: 5px; 
+}
+
+/* Стиль для ограничения ширины полей в формах авторизации/регистрации */
+.form-short-input .form-control {
+    /* Устанавливаем максимальную ширину, например, 300px или 25% */
+    max-width: 380px;
+}

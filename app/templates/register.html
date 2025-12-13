@@ -4,34 +4,50 @@
     <h1>Регистрация</h1>
     <form action="" method="POST">
         {{ form.hidden_tag() }}
-        <p>
-            {{ form.username.label }}<br>
-            {{ form.username(size=32) }}<br>
-            {% for error in form.username.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.email.label }}<br>
-            {{ form.email(size=64) }}<br>
-            {% for error in form.email.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.password.label }}<br>
-            {{ form.password(size=32) }}<br>
-            {% for error in form.password.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.password2.label }}<br>
-            {{ form.password2(size=32) }}<br>
-            {% for error in form.password2.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-            {% endfor %}
-        </p>
-        <p>{{ form.submit() }}</p>
+        <div class="form-short-input">
+            <p>
+                {{ form.username.label }}<br>
+                {{ form.username(class="form-control") }}<br>
+                {% for error in form.username.errors %}
+                <span style="color: red;">[{{ error }}]</span>
+                {% endfor %}
+            </p>
+            <p>
+                {{ form.email.label }}<br>
+                {{ form.email(class="form-control") }}<br>
+                {% for error in form.email.errors %}
+                <span style="color: red;">[{{ error }}]</span>
+                {% endfor %}
+            </p>
+            <p>
+                {{ form.password.label }}<br>
+                <div class="password-toggle-container">
+                    {{ form.password(id="password-reg", class="form-control") }} 
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            aria-label="Показать пароль" 
+                            onclick="togglePasswordVisibility('password-reg', this)">
+                        👁️
+                    </button>
+                </div>
+                {% for error in form.password.errors %}
+                    <span style="color: red;">[{{ error }}]</span>
+                {% endfor %}
+            </p>
+            <p>
+                {{ form.password2.label }}<br>
+                <div class="password-toggle-container">
+                    {{ form.password2(id="password2-reg", class="form-control") }} 
+                    <button type="button" class="btn btn-outline-secondary btn-sm" 
+                            aria-label="Показать пароль" 
+                            onclick="togglePasswordVisibility('password2-reg', this)">
+                        👁️
+                    </button>
+                </div>
+                {% for error in form.password2.errors %}
+                    <span style="color: red;">[{{ error }}]</span>
+                {% endfor %}
+            </p>
+        </div>
+        <p>{{ form.submit(class="btn btn-primary") }}</p>
     </form>
 {% endblock %}
