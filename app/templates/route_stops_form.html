@@ -60,8 +60,18 @@
             {% endfor %}
         </div>
         
-        {# ИСПРАВЛЕНИЕ ОШИБКИ 'multiple values for keyword argument name' #}
-        {{ form.add_stop(class="btn btn-secondary mb-4") }}
+        {# ЛОГИКА ДЛЯ ГОРОДСКОГО АВТОБУСА (0x02) #}
+        {# Городской маршрут состоит только из одной зоны (0), добавлять другие нельзя #}
+        {% if route.transport_type == '0x02' %}
+            <div class="alert alert-primary">
+                <i class="fas fa-info-circle"></i> 
+                Для городского маршрута (Тип 02) предусмотрена только одна тарифная зона (Зона 0). 
+                Добавление дополнительных остановок заблокировано.
+            </div>
+        {% else %}
+            {# Для остальных типов разрешаем добавлять остановки #}
+            {{ form.add_stop(class="btn btn-secondary mb-4") }}
+        {% endif %}
 
         <div class="mt-4">
             {{ form.next_step(class="btn btn-primary") }}

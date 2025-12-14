@@ -62,7 +62,7 @@
 
         <div id="tariff-tables-container">
             {# Рендеринг существующих тарифных таблиц #}
-            {# 💥 ИЗМЕНЕНИЕ: ИТЕРАЦИЯ ПО form.tariff_tables #}
+            {# ИТЕРАЦИЯ ПО form.tariff_tables #}
             {% for entry_form in form.tariff_tables %}
                 <div class="card mb-3 tariff-table-entry" data-index="{{ loop.index0 }}">
                     <div class="card-body">

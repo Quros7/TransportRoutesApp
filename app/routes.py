@@ -247,7 +247,7 @@ def edit_route_stops(route_id):
     if route is None:
         abort(404)
         
-    form = RouteStopsForm(obj=route)
+    form = RouteStopsForm(obj=route, route=route)
 
     # 1. ОБРАБОТКА POST-ЗАПРОСА
     if form.validate_on_submit():
