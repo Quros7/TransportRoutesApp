@@ -13,6 +13,11 @@ class User(UserMixin, db.Model):
     username: so.Mapped[str] = so.mapped_column(sa.String(64), index=True, unique=True)
     email: so.Mapped[str] = so.mapped_column(sa.String(120), index=True, unique=True)
     password_hash: so.Mapped[Optional[str]] = so.mapped_column(sa.String(256))
+
+    # Поля для настроек файла конфигурации по умолчанию
+    default_region_code = db.Column(db.String(2), default='00')
+    default_carrier_id = db.Column(db.String(4), default='0000')
+    default_unit_id = db.Column(db.String(4), default='0000')
   
     def __repr__(self):
         return '<User {}>'.format(self.username)

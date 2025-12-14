@@ -1,6 +1,48 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>Пользователь: {{ user.username }}</h1>
+    <h1>Профиль пользователя: {{ user.username }}</h1>
     <hr>
+    
+    {# ---------------------------------------------------------------------- #}
+    {# БЛОК РЕДАКТИРОВАНИЯ НАСТРОЕК ПО УМОЛЧАНИЮ #}
+    {# ---------------------------------------------------------------------- #}
+    <h3>Настройки по умолчанию для генерации объединённого конфигурационного файла</h3>
+    <p class="text-muted">
+        Эти параметры будут автоматически подставляться в шапку конфигурационного файла при выборе нескольких маршрутов одновременно.
+    </p>
+
+    <form method="POST">
+        {# form.hidden_tag() обеспечивает CSRF-защиту #}
+        {{ form.hidden_tag() }}
+        
+        <div class="row">
+            {# Поле: Код региона #}
+            <div class="col-md-4 mb-3">
+                {{ form.default_region_code.label(class="form-label") }}
+                {{ form.default_region_code(class="form-control") }}
+                {% for error in form.default_region_code.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+            
+            {# Поле: ID Перевозчика #}
+            <div class="col-md-4 mb-3">
+                {{ form.default_carrier_id.label(class="form-label") }}
+                {{ form.default_carrier_id(class="form-control") }}
+                {% for error in form.default_carrier_id.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+            
+            {# Поле: ID Подразделения #}
+            <div class="col-md-4 mb-3">
+                {{ form.default_unit_id.label(class="form-label") }}
+                {{ form.default_unit_id(class="form-control") }}
+                {% for error in form.default_unit_id.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            {# Кнопка сохранения #}
+            {{ form.submit(class="btn btn-primary") }}
+        </div>
+    </form>
+
 {% endblock %}

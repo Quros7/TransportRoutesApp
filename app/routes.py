@@ -1,6 +1,6 @@
 from app import app, db
 from app.models import User, Route
-from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm, BulkGenerateForm
+from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm, BulkGenerateForm, EditProfileForm
 from flask import render_template, flash, redirect, url_for, request, abort, current_app, send_file
 from flask_login import current_user, login_user, logout_user, login_required
 import sqlalchemy as sa
@@ -60,15 +60,64 @@ def register():
     return render_template('register.html', title='Регистрация', form=form)
 
 
-@app.route('/user/<username>')
+# ПУТЬ ДЛЯ ПРОСМОТРА И РЕДАКТИРОВАНИЯ ПРОФИЛЯ
+@app.route('/user/<username>', methods=['GET', 'POST'])
 @login_required
 def user(username):
-    user = db.first_or_404(sa.select(User).where(User.username == username))
-    posts = [
-        {'author': user, 'body': 'Test post #1'},
-        {'author': user, 'body': 'Test post #2'}
-    ]
-    return render_template('user.html', user=user, posts=posts)
+    # 1. Защита: Убеждаемся, что пользователь просматривает/редактирует свой профиль
+    if current_user.username != username:
+        # Если пытаются посмотреть чужой профиль, перенаправляем на свой
+        return redirect(url_for('user', username=current_user.username))
+
+    # user = db.first_or_404(sa.select(User).where(User.username == username))
+    # Теперь нам не нужно искать пользователя по имени, так как у нас есть current_user
+
+    # 2. Инициализация формы: Загружаем текущие значения из объекта current_user
+    # При GET-запросе: поля заполняются данными из БД.
+    # При POST-запросе: поля заполняются данными из request.form, а старые данные 
+    # в current_user будут перезаписаны после валидации.
+    form = EditProfileForm(obj=current_user)
+
+    if form.validate_on_submit():
+        # 3. Обработка POST-запроса (Сохранение)
+        
+        # Сохраняем отфильтрованные и валидированные данные обратно в current_user
+        current_user.default_region_code = form.default_region_code.data
+        current_user.default_carrier_id = form.default_carrier_id.data
+        current_user.default_unit_id = form.default_unit_id.data
+        
+        db.session.commit()
+        flash('Настройки профиля для массовой генерации успешно сохранены.', 'success')
+        return redirect(url_for('user', username=current_user.username))
+        
+    # 4. Обработка GET-запроса или POST с ошибкой валидации
+    return render_template('user.html', 
+                           title='Настройки профиля', 
+                           user=current_user, # Передаем current_user, который мы верифицировали
+                           form=form) # Передаем форму для отображения
+
+
+@app.route('/edit_profile', methods=['GET', 'POST'])
+@login_required
+def edit_profile():
+    # Инициализируем форму, загружая текущие значения из объекта current_user
+    form = EditProfileForm(obj=current_user)
+
+    if form.validate_on_submit():
+        # Сохраняем отфильтрованные и валидированные данные в объект current_user
+        current_user.default_region_code = form.default_region_code.data
+        current_user.default_carrier_id = form.default_carrier_id.data
+        current_user.default_unit_id = form.default_unit_id.data
+        
+        db.session.commit()
+        flash('Настройки профиля для массовой генерации успешно сохранены.', 'success')
+        return redirect(url_for('edit_profile')) # Перенаправляем обратно на ту же страницу
+        
+    # GET-запрос или ошибка валидации
+    return render_template('user.html', 
+                           title='Настройки профиля', 
+                           user=current_user, # Передаем user для отображения заголовка
+                           form=form) # Передаем форму
 
 
 @app.route('/routes')
@@ -85,14 +134,23 @@ def route_list():
     # Инициализируем форму для массовой генерации
     bulk_form = BulkGenerateForm() 
 
-    # TODO: Здесь можно инициализировать bulk_form значениями по умолчанию
-    # Например, взять значения из последнего созданного маршрута пользователя
-    if routes:
-        last_route = routes[0] # Берем последний (или любой) маршрут для начальных значений
-        bulk_form.region_code.data = last_route.region_code
-        bulk_form.carrier_id.data = last_route.carrier_id
-        bulk_form.unit_id.data = last_route.unit_id
-        bulk_form.decimal_places.data = last_route.decimal_places
+    # 1. ПРИОРИТЕТ: Загружаем значения из ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ
+    # Значения уже отфильтрованы и заполнены нулями благодаря дефолтам в модели
+    if current_user.default_region_code:
+        bulk_form.region_code.data = current_user.default_region_code
+    if current_user.default_carrier_id:
+        bulk_form.carrier_id.data = current_user.default_carrier_id
+    if current_user.default_unit_id:
+        bulk_form.unit_id.data = current_user.default_unit_id
+        
+    # 2. ЗАПАСНОЙ ВАРИАНТ: Если профиль пуст (чего не должно быть при установке defaults),
+    # или если нужно инициализировать decimal_places (которого нет в профиле), берем из первого маршрута.
+    if routes: 
+        last_route = routes[0] 
+        
+        # region_code, carrier_id, unit_id перезаписываются только если нет в профиле (не обязательно)
+        # Для decimal_places берем значение из первого маршрута, т.к. оно не хранится в профиле
+        bulk_form.decimal_places.data = last_route.decimal_places if hasattr(last_route, 'decimal_places') else '2'
 
     return render_template('route_list.html', 
                            routes=routes, 
@@ -131,13 +189,22 @@ def create_or_edit_route_info(route_id):
         # Примечание: data=dict(tariffs=route.tariffs) необходим для корректной загрузки
         # FieldList с подформами (TariffForm), хранящимися в JSON.
         form = RouteInfoForm(obj=route, data=dict(tariff_tables=route.tariff_tables))
-        
         # Позволяем Flask-WTF работать с динамически удаленными/добавленными полями
         form.tariff_tables.min_entries = 0
         
     else:
         # --- РЕЖИМ СОЗДАНИЯ ---
         form = RouteInfoForm()
+
+        # Предзаполнение полей из профиля пользователя (current_user)
+        # Эта логика выполняется только в режиме создания, до обработки POST-запроса, 
+        # то есть только при GET-запросе, когда form.validate_on_submit() еще не вызывался.
+        if current_user.default_region_code:
+            form.region_code.data = current_user.default_region_code
+        if current_user.default_carrier_id:
+            form.carrier_id.data = current_user.default_carrier_id
+        if current_user.default_unit_id:
+            form.unit_id.data = current_user.default_unit_id
 
     if form.validate_on_submit():
         
@@ -210,14 +277,6 @@ def create_or_edit_route_info(route_id):
             return redirect(url_for('edit_route_stops', route_id=route.id))
         
     # --- GET-запрос (или валидация не пройдена) ---
-    
-    else:
-        pass
-        # # !!! ВРЕМЕННЫЙ КОД ДЛЯ ОТЛАДКИ !!!
-        # app.logger.error("--- ОШИБКА ВАЛИДАЦИИ ФОРМЫ ---")
-        # app.logger.error(form.errors)
-        # app.logger.error("------------------------------")
-        # # !!! КОНЕЦ ВРЕМЕННОГО КОДА !!!
 
     # Устанавливаем заголовок страницы
     title = 'Создание маршрута: Шаг 1' if route is None else f'Редактирование маршрута: {route.route_name}'
