@@ -407,6 +407,8 @@ def edit_route_prices(route_id):
 
             if isinstance(new_matrix, list):
                 route.price_matrix = new_matrix
+                route.is_completed = True
+
                 db.session.commit()
                 flash('Цены успешно сохранены!', 'success')
                 return redirect(url_for('route_list'))
@@ -469,6 +471,12 @@ def generate_config(route_id):
     if not route:
         flash('Маршрут не найден.', 'danger')
         return redirect(url_for('route_list'))
+
+    # Проверка завершённости маршрута
+    if not route.is_completed:
+        flash('Маршрут не готов к экспорту. Пожалуйста, заполните все шаги (Остановки и Цены) перед генерацией файла.', 'danger')
+        # Перенаправляем на страницу редактирования остановок, чтобы пользователь видел, что нужно завершить работу
+        return redirect(url_for('edit_route_stops', route_id=route.id))
 
     # Создаем буфер в памяти для записи байтов
     buffer = io.BytesIO()

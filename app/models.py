@@ -49,6 +49,9 @@ class Route(db.Model):
     stops: so.Mapped[List] = so.mapped_column(JSON) 
     price_matrix: so.Mapped[List] = so.mapped_column(JSON)
 
+    # Статус завершенности заполнения всех шагов
+    is_completed: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False)
+
 
     def __repr__(self):
         return f'<Route {self.route_name}>'

@@ -37,9 +37,8 @@
                             <td>{{ route.carrier_id }}</td>
                             <td>
                                 {# Выводим понятное название типа транспорта #}
-                                {% if route.transport_type == '0x02' %}Автобус (городской)
-                                {% elif route.transport_type == '0x20' %}Автобус (пригородный)
-                                {% else %}Код: {{ route.transport_type }}{% endif %}
+                                {# Используем глобальный словарь, доступный через контекстный процессор #}
+                                {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
                             </td>
                             <td>
                                 {{ route.stops | length if route.stops else 0 }}

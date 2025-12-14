@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 import sqlalchemy as sa
 from app import db
 from app.models import User
+from app.constants import TRANSPORT_TYPE_CHOICES
 
 
 class LoginForm(FlaskForm):
@@ -113,16 +114,20 @@ class RouteInfoForm(FlaskForm):
     # Поле для точности после запятой (обычно 2)
     decimal_places = SelectField('Кол-во знаков после запятой (для цен)', choices=[('0', '0'), ('1', '1'), ('2', '2')], validators=[DataRequired()])
     
-    transport_type = SelectField('Тип транспорта', choices=[
-        ('0x01', 'Метрополитен (01)'),
-        ('0x02', 'Автобус (городской) (02)'), # Используется 02 в файле
-        ('0x20', 'Автобус (пригородный) (20)'),
-        ('0x40', 'Автобус (междугородний) (40)'),
-        ('0x04', 'Троллейбус (04)'),
-        ('0x08', 'Трамвай (08)'),
-        ('0x10', 'Маршрутное такси (10)'),
-        ('0x80', 'Поезд (пригородный) (80)'),
-    ], validators=[DataRequired()])
+    transport_type = SelectField('Тип транспорта', 
+                                choices=list(TRANSPORT_TYPE_CHOICES.items()), 
+                                validators=[DataRequired()])
+
+    # transport_type = SelectField('Тип транспорта', choices=[
+    #     ('0x01', 'Метрополитен (01)'),
+    #     ('0x02', 'Автобус (городской) (02)'), # Используется 02 в файле
+    #     ('0x20', 'Автобус (пригородный) (20)'),
+    #     ('0x40', 'Автобус (междугородний) (40)'),
+    #     ('0x04', 'Троллейбус (04)'),
+    #     ('0x08', 'Трамвай (08)'),
+    #     ('0x10', 'Маршрутное такси (10)'),
+    #     ('0x80', 'Поезд (пригородный) (80)'),
+    # ], validators=[DataRequired()])
     
     # Теперь это Тарифные таблицы (FieldList)
     tariff_tables = FieldList(
