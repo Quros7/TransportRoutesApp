@@ -1,6 +1,6 @@
-def write_route_body_to_buffer(buffer, route):
+def write_route_body_to_buffer(buffer, route, decimal_places_for_config):
     """
-    Записывает информацию о маршруте (начиная с тега R) в переданный буфер.
+    Записывает информацию о маршруте (начиная с тега R) в переданный буфер, используя указанную точность цен.
     Кодировка CP866.
     """
     def write_line(text):
@@ -40,7 +40,10 @@ def write_route_body_to_buffer(buffer, route):
     # ==========================================
     # 5. МАТРИЦА ЦЕН
     # ==========================================
-    multiplier = 10 ** int(route.decimal_places)
+    # ИСПОЛЬЗУЕМ ПЕРЕДАННЫЙ ПАРАМЕТР ТОЧНОСТИ 
+    multiplier = 10 ** int(decimal_places_for_config)
+
+    zones_count = len(route.stops)
 
     for i in range(zones_count):
         for j in range(zones_count):
@@ -50,6 +53,8 @@ def write_route_body_to_buffer(buffer, route):
                     tab_id_str = str(table['tab_number'])
                     try:
                         raw_price = route.price_matrix[i][j].get(tab_id_str, 0)
+                        
+                        # ПРЕОБРАЗОВАНИЕ В ЦЕЛОЕ ЧИСЛО С УЧЕТОМ НОВОГО МНОЖИТЕЛЯ
                         price_int = int(float(raw_price) * multiplier)
                         prices_list.append(str(price_int))
                     except (IndexError, AttributeError, ValueError):

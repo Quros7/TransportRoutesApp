@@ -17,14 +17,43 @@
         <form method="POST" action="{{ url_for('generate_bulk_config') }}" id="bulk-generate-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-            {# Панель массовых действий: Кнопка генерации #}
-            <div class="mb-3 p-3 bg-light border rounded d-flex align-items-center">
-                {# Кнопка disabled по умолчанию, будет включена через JS #}
-                <button type="submit" class="btn btn-primary" id="bulk-generate-btn" disabled>
-                    <i class="fas fa-file-download"></i> Создать конфигурацию для выбранных маршрутов
-                </button>
-                <div class="ms-3 text-secondary" id="selected-count-display">
-                    Выбрано: 0
+            {# Панель массовых действий: Кнопка генерации + Поля шапки #}
+            <div class="mb-3 p-3 bg-light border rounded">
+                <h4>Параметры шапки конфигурационного файла:</h4>
+
+                {# Вставляем поля формы BULK_FORM #}
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        {{ bulk_form.region_code.label(class="form-label small") }}
+                        {{ bulk_form.region_code(class="form-control form-control-sm") }}
+                        {% for error in bulk_form.region_code.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                    </div>
+                    <div class="col-md-3">
+                        {{ bulk_form.carrier_id.label(class="form-label small") }}
+                        {{ bulk_form.carrier_id(class="form-control form-control-sm") }}
+                        {% for error in bulk_form.carrier_id.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                    </div>
+                    <div class="col-md-3">
+                        {{ bulk_form.unit_id.label(class="form-label small") }}
+                        {{ bulk_form.unit_id(class="form-control form-control-sm") }}
+                        {% for error in bulk_form.unit_id.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                    </div>
+                    <div class="col-md-3">
+                        {{ bulk_form.decimal_places.label(class="form-label small") }}
+                        {{ bulk_form.decimal_places(class="form-select form-select-sm") }}
+                        {% for error in bulk_form.decimal_places.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                    </div>
+                </div>
+
+                {# Кнопка и счетчик #}
+                <div class="d-flex align-items-center pt-2 border-top">
+                    {# Кнопка disabled по умолчанию, будет включена через JS #}
+                    <button type="submit" class="btn btn-primary" id="bulk-generate-btn" disabled>
+                        <i class="fas fa-file-download"></i> Создать конфигурацию для выбранных маршрутов
+                    </button>
+                    <div class="ms-3 text-secondary" id="selected-count-display">
+                        Выбрано: 0
+                    </div>
                 </div>
             </div>
 

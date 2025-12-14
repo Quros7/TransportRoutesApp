@@ -1,6 +1,6 @@
 from app import app, db
 from app.models import User, Route
-from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm
+from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm, BulkGenerateForm
 from flask import render_template, flash, redirect, url_for, request, abort, current_app, send_file
 from flask_login import current_user, login_user, logout_user, login_required
 import sqlalchemy as sa
@@ -10,7 +10,6 @@ from urllib.parse import urlsplit, parse_qs
 from flask_wtf.csrf import validate_csrf, generate_csrf
 from wtforms import ValidationError
 from datetime import datetime
-
 from app.utils import write_route_body_to_buffer
 
 
@@ -82,8 +81,26 @@ def route_list():
     # Явно передаем CSRF-токен в шаблон
     # Используем функцию generate_csrf(), чтобы получить строковое значение токена.
     csrf_token = generate_csrf()
+
+    # Инициализируем форму для массовой генерации
+    bulk_form = BulkGenerateForm() 
+
+    # TODO: Здесь можно инициализировать bulk_form значениями по умолчанию
+    # Например, взять значения из последнего созданного маршрута пользователя
+    if routes:
+        last_route = routes[0] # Берем последний (или любой) маршрут для начальных значений
+        bulk_form.region_code.data = last_route.region_code
+        bulk_form.carrier_id.data = last_route.carrier_id
+        bulk_form.unit_id.data = last_route.unit_id
+        bulk_form.decimal_places.data = last_route.decimal_places
+
+    return render_template('route_list.html', 
+                           routes=routes, 
+                        #    TRANSPORT_TYPES=TRANSPORT_TYPE_CHOICES,
+                           csrf_token=csrf_token, # Это нужно для формы
+                           bulk_form=bulk_form) # <-- ПЕРЕДАЕМ НОВУЮ ФОРМУ
     
-    return render_template('route_list.html', routes=routes, csrf_token=csrf_token)
+    # return render_template('route_list.html', routes=routes, csrf_token=csrf_token)
 
 
 # --- Создание ИЛИ Редактирование Общей информации (Шаг 1) ---
@@ -618,12 +635,25 @@ def generate_bulk_config():
     # 1. Получаем список ID выбранных маршрутов из формы
     # В HTML чекбоксы будут иметь name="route_ids"
     route_ids = request.form.getlist('route_ids')
+
+    # 2. Инициализируем и валидируем форму шапки
+    # Если форма не пройдет валидацию, мы не сможем получить ее данные (data)
+    bulk_form = BulkGenerateForm(request.form)
+
+    if not bulk_form.validate():
+        # Если валидация не удалась, мы не можем сгенерировать файл.
+        # Сохраняем сообщение об ошибке (например, для первой ошибки)
+        first_error = next(iter(bulk_form.errors.values()))[0]
+        flash(f'Ошибка в параметрах шапки: {first_error}', 'danger')
+        
+        # Перенаправляем обратно на список маршрутов (GET)
+        return redirect(url_for('route_list'))
     
     if not route_ids:
         flash('Не выбрано ни одного маршрута.', 'warning')
         return redirect(url_for('route_list'))
 
-    # 2. Загружаем маршруты из БД (проверяя, что они принадлежат user_id)
+    # 3. Загружаем маршруты из БД (проверяя, что они принадлежат user_id)
     # Используем .in_(route_ids) для фильтрации
     query = sa.select(Route).where(
         Route.id.in_(route_ids), 
@@ -635,14 +665,17 @@ def generate_bulk_config():
         flash('Маршруты не найдены.', 'danger')
         return redirect(url_for('route_list'))
 
-    # 3. Валидация: Проверяем флаг is_completed
+    # 4. Валидация: Проверяем флаг is_completed
     incomplete_routes = [r.route_name for r in routes if not r.is_completed]
     
     if incomplete_routes:
         flash(f'Ошибка! Следующие маршруты не заполнены до конца: {", ".join(incomplete_routes)}. Заполните их перед генерацией.', 'danger')
         return redirect(url_for('route_list'))
+    
+    # Получаем значение точности цен из формы для использования в шапке и теле
+    decimal_places_value = bulk_form.decimal_places.data # Значение V (0, 1 или 2)
 
-    # 4. Генерация файла
+    # 5. Генерация файла
     buffer = io.BytesIO()
     
     # Вспомогательная функция для записи одной строки (для шапки)
@@ -650,15 +683,14 @@ def generate_bulk_config():
         buffer.write((text + '\r\n').encode('cp866', errors='replace'))
 
     try:
-        # --- ШАПКА ФАЙЛА (Берем из ПЕРВОГО маршрута) ---
-        # По условию задачи шапка одна на файл.
-        first_route = routes[0]
-        
+        # --- ШАПКА ФАЙЛА (Берем данные из bulk_form.data) ---
         current_date = datetime.now().strftime("%y%m%d")
-        rr = str(first_route.region_code).zfill(2)
-        tttt = str(first_route.carrier_id).zfill(4)
-        dddd = str(first_route.unit_id).zfill(4)
-        v = str(first_route.decimal_places)
+        
+        # ИСПОЛЬЗУЕМ ДАННЫЕ ИЗ ФОРМЫ (ОНИ УЖЕ ОТФИЛЬТРОВАНЫ и ВАЛИДИРОВАНЫ)
+        rr = bulk_form.region_code.data
+        tttt = bulk_form.carrier_id.data
+        dddd = bulk_form.unit_id.data
+        v = decimal_places_value
 
         header_line = f"{rr};{tttt};{dddd};{current_date};{v}"
         write_line(header_line)
@@ -666,7 +698,7 @@ def generate_bulk_config():
         # --- ТЕЛА МАРШРУТОВ ---
         for route in routes:
             # Используем нашу функцию рефакторинга
-            write_route_body_to_buffer(buffer, route)
+            write_route_body_to_buffer(buffer, route, decimal_places_value)
 
         # --- ОТПРАВКА ---
         buffer.seek(0)
