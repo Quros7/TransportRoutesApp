@@ -3,7 +3,6 @@
 {% block content %}
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Мои маршруты</h2>
-        {# 1. Кнопка создания нового маршрута: Изменена ссылка #}
         <a href="{{ url_for('create_or_edit_route_info') }}" class="btn btn-success">
             <i class="fas fa-plus"></i> Создать новый маршрут
         </a>
@@ -14,93 +13,176 @@
             У вас пока нет сохраненных маршрутов. Начните с создания первого!
         </div>
     {% else %}
-        <div class="table-responsive">
-            <table class="table table-striped table-hover align-middle">
-                <thead>
-                    <tr>
-                        <th scope="col">№</th>
-                        <th scope="col">Название маршрута</th>
-                        <th scope="col">Перевозчик (ID)</th>
-                        <th scope="col">Тип транспорта</th>
-                        <th scope="col">Остановки</th>
-                        <th scope="col">Тарифы</th>
-                        <th scope="col" class="text-center" style="min-width: 250px;">Действия</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for route in routes %}
-                        <tr>
-                            <th scope="row">{{ loop.index }}</th>
-                            <td>
-                                <strong>{{ route.route_name }}</strong>
-                            </td>
-                            <td>{{ route.carrier_id }}</td>
-                            <td>
-                                {# Выводим понятное название типа транспорта #}
-                                {# Используем глобальный словарь, доступный через контекстный процессор #}
-                                {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
-                            </td>
-                            <td>
-                                {{ route.stops | length if route.stops else 0 }}
-                            </td>
-                            <td>
-                                {{ route.tariffs | length if route.tariffs else 0 }}
-                            </td>
-                            <td class="d-flex justify-content-center align-items-center"> 
-                                {# 2. Кнопка для редактирования общей информации (Шаг 1) #}
-                                <a href="{{ url_for('create_or_edit_route_info', route_id=route.id) }}" 
-                                   class="btn btn-sm btn-outline-info me-2" 
-                                   data-bs-toggle="tooltip" title="Редактировать информацию">
-                                    <i class="fas fa-edit"></i> Info
-                                </a>
-                                
-                                {# Кнопка для редактирования остановок (Шаг 2) #}
-                                <a href="{{ url_for('edit_route_stops', route_id=route.id) }}" 
-                                   class="btn btn-sm btn-outline-info me-2" 
-                                   data-bs-toggle="tooltip" title="Редактировать остановки">
-                                    <i class="fas fa-map-marker-alt"></i> Остановки
-                                </a>
-                                
-                                {# Кнопка для редактирования цен (Шаг 3) #}
-                                <a href="{{ url_for('edit_route_prices', route_id=route.id) }}" 
-                                   class="btn btn-sm btn-outline-info me-2"
-                                   data-bs-toggle="tooltip" title="Редактировать матрицу цен">
-                                    <i class="fas fa-dollar-sign"></i> Цены
-                                </a>
+        {# НАЧАЛО ФОРМЫ ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ #}
+        <form method="POST" action="{{ url_for('generate_bulk_config') }}" id="bulk-generate-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-                                {# Кнопка генерации файла #}
-                                <a href="{{ url_for('generate_config', route_id=route.id) }}" 
-                                    class="btn btn-sm btn-primary me-2"
-                                    data-bs-toggle="tooltip" title="Скачать TRFZ файл">
-                                    <i class="fas fa-download"></i> Конфиг
-                                </a>
-                                
-                                {# 💥 НОВАЯ КНОПКА: ФОРМА ДЛЯ УДАЛЕНИЯ МАРШРУТА #}
-                                <form method="POST" action="{{ url_for('delete_route', route_id=route.id) }}" class="m-0 p-0">
-                                    {# 💥 ИСПОЛЬЗУЕМ ПЕРЕМЕННУЮ, ПЕРЕДАННУЮ ИЗ PYTHON #}
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                    
-                                    <button type="submit" 
-                                            class="btn btn-sm btn-danger" 
-                                            data-bs-toggle="tooltip" title="Удалить маршрут"
-                                            onclick="return confirm('Вы уверены, что хотите удалить маршрут {{ route.route_name }}? Это действие необратимо.');">
-                                        <i class="fas fa-trash"></i> Удалить
-                                    </button>
-                                </form>
-                            </td>
+            {# Панель массовых действий: Кнопка генерации #}
+            <div class="mb-3 p-3 bg-light border rounded d-flex align-items-center">
+                {# Кнопка disabled по умолчанию, будет включена через JS #}
+                <button type="submit" class="btn btn-primary" id="bulk-generate-btn" disabled>
+                    <i class="fas fa-file-download"></i> Создать конфигурацию для выбранных маршрутов
+                </button>
+                <div class="ms-3 text-secondary" id="selected-count-display">
+                    Выбрано: 0
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            {# ИСПРАВЛЕНО: Добавлен label "Выбрать все" #}
+                            <th scope="col" >
+                                <div class="form-check d-flex align-items-center justify-content-between">
+                                    <input type="checkbox" id="select-all" class="form-check-input me-2">
+                                    {# <label class="form-check-label" for="select-all">Выбрать все</label> #}
+                                </div>
+                            </th>
+                            <th scope="col">№</th>
+                            <th scope="col">Название маршрута</th>
+                            <th scope="col">Перевозчик (ID)</th>
+                            <th scope="col">Тип транспорта</th>
+                            <th scope="col">Остановки</th>
+                            <th scope="col">Тарифы</th>
+                            <th scope="col">Статус</th> 
+                            <th scope="col" class="text-center" style="min-width: 250px;">Действия</th>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        {% for route in routes %}
+                            <tr>
+                                <td>
+                                    {# Элемент для отправки ID на сервер #}
+                                    <input type="checkbox" name="route_ids" value="{{ route.id }}" class="form-check-input route-checkbox">
+                                </td>
+                                <th scope="row">{{ loop.index }}</th>
+                                <td>
+                                    <strong>{{ route.route_name }}</strong>
+                                </td>
+                                <td>{{ route.carrier_id }}</td>
+                                <td>
+                                    {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
+                                </td>
+                                <td class="text-center">
+                                    {{ route.stops | length if route.stops else 0 }}
+                                </td>
+                                <td class="text-center">
+                                    {{ route.tariffs | length if route.tariffs else 0 }}
+                                </td>
+                                <td>
+                                    {% if route.is_completed %}
+                                        <span class="badge bg-success" data-bs-toggle="tooltip" title="Маршрут полностью заполнен и готов к экспорту.">Готов</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark" data-bs-toggle="tooltip" title="Требуется заполнение или проверка данных (Остановки, Цены).">В работе</span>
+                                    {% endif %}
+                                </td>
+                                <td class="d-flex justify-content-center align-items-center"> 
+                                    {# ... (Кнопки действий без изменений) ... #}
+                                    <a href="{{ url_for('create_or_edit_route_info', route_id=route.id) }}" 
+                                       class="btn btn-sm btn-outline-info me-2" 
+                                       data-bs-toggle="tooltip" title="Редактировать информацию">
+                                        <i class="fas fa-edit"></i> Info
+                                    </a>
+                                    <a href="{{ url_for('edit_route_stops', route_id=route.id) }}" 
+                                       class="btn btn-sm btn-outline-info me-2" 
+                                       data-bs-toggle="tooltip" title="Редактировать остановки">
+                                        <i class="fas fa-map-marker-alt"></i> Остановки
+                                    </a>
+                                    <a href="{{ url_for('edit_route_prices', route_id=route.id) }}" 
+                                       class="btn btn-sm btn-outline-info me-2"
+                                       data-bs-toggle="tooltip" title="Редактировать матрицу цен">
+                                        <i class="fas fa-dollar-sign"></i> Цены
+                                    </a>
+
+                                    <a href="{{ url_for('generate_config', route_id=route.id) }}" 
+                                         class="btn btn-sm btn-primary me-2"
+                                         data-bs-toggle="tooltip" title="Скачать TRFZ файл">
+                                         <i class="fas fa-download"></i> Конфиг
+                                     </a>
+                                    
+                                    <form method="POST" action="{{ url_for('delete_route', route_id=route.id) }}" class="m-0 p-0">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        
+                                        <button type="submit" 
+                                                class="btn btn-sm btn-danger" 
+                                                data-bs-toggle="tooltip" title="Удалить маршрут"
+                                                onclick="return confirm('Вы уверены, что хотите удалить маршрут {{ route.route_name }}? Это действие необратимо.');">
+                                            <i class="fas fa-trash"></i> Удалить
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+        {# КОНЕЦ ФОРМЫ ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ #}
     {% endif %}
 
-    {# Для корректной работы иконок FontAwesome и Bootstrap tooltips #}
-    <script>
-        // Инициализация всплывающих подсказок Bootstrap
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-          return new bootstrap.Tooltip(tooltipTriggerEl)
-        })
-    </script>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Инициализация всплывающих подсказок Bootstrap (существующий код)
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+
+    // ИСПРАВЛЕННАЯ ЛОГИКА: "Выбрать все" и счетчик
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectAll = document.getElementById('select-all');
+        const checkboxes = document.querySelectorAll('.route-checkbox');
+        const countDisplay = document.getElementById('selected-count-display');
+        const bulkBtn = document.getElementById('bulk-generate-btn');
+        const totalCheckboxes = checkboxes.length;
+
+        function updateCount() {
+            let checkedCount = 0;
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    checkedCount++;
+                }
+            });
+            
+            // 1. Обновление отображения и состояния кнопки
+            countDisplay.textContent = `Выбрано: ${checkedCount}`;
+            bulkBtn.disabled = checkedCount === 0; 
+
+            // 2. Синхронизация главного чекбокса
+            if (checkedCount === totalCheckboxes && totalCheckboxes > 0) {
+                selectAll.checked = true;
+                selectAll.indeterminate = false;
+            } else if (checkedCount > 0) {
+                // Если выбрана часть
+                selectAll.checked = false;
+                selectAll.indeterminate = true;
+            } else {
+                // Если не выбран ни один
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            }
+        }
+
+        // Обработчик "Выбрать все"
+        selectAll.addEventListener('change', function() {
+            const isChecked = this.checked;
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+            updateCount(); 
+        });
+
+        // Обработчики индивидуальных чекбоксов
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateCount); 
+        });
+
+        // Первоначальное обновление счетчика
+        updateCount();
+    });
+</script>
 {% endblock %}

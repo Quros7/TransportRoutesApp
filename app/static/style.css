@@ -1,3 +1,7 @@
+body {
+    margin-bottom: 20px;
+}
+
 /* CSS для размещения поля и кнопки в одну линию */
 .password-toggle-container {
     /* Только flexbox для расположения */

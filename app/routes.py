@@ -11,6 +11,8 @@ from flask_wtf.csrf import validate_csrf, generate_csrf
 from wtforms import ValidationError
 from datetime import datetime
 
+from app.utils import write_route_body_to_buffer
+
 
 @app.route('/')
 @app.route('/index')
@@ -430,7 +432,7 @@ def delete_route(route_id):
     return redirect(url_for('route_list'))
 
 
-# --- Генерация файла конфигурации ---
+# --- Генерация файла конфигурации для одного маршрута ---
 @app.route('/route/<int:route_id>/generate_config')
 @login_required
 def generate_config(route_id):
@@ -605,5 +607,79 @@ def generate_config(route_id):
     except Exception as e:
         # Логирование ошибки (опционально)
         print(f"Error generating config: {e}")
+        flash(f'Ошибка при генерации файла: {e}', 'danger')
+        return redirect(url_for('route_list'))
+
+
+# --- Генерация файла конфигурации для нескольких маршрутов ---
+@app.route('/routes/generate_bulk_config', methods=['POST'])
+@login_required
+def generate_bulk_config():
+    # 1. Получаем список ID выбранных маршрутов из формы
+    # В HTML чекбоксы будут иметь name="route_ids"
+    route_ids = request.form.getlist('route_ids')
+    
+    if not route_ids:
+        flash('Не выбрано ни одного маршрута.', 'warning')
+        return redirect(url_for('route_list'))
+
+    # 2. Загружаем маршруты из БД (проверяя, что они принадлежат user_id)
+    # Используем .in_(route_ids) для фильтрации
+    query = sa.select(Route).where(
+        Route.id.in_(route_ids), 
+        Route.user_id == current_user.id
+    )
+    routes = db.session.scalars(query).all()
+    
+    if not routes:
+        flash('Маршруты не найдены.', 'danger')
+        return redirect(url_for('route_list'))
+
+    # 3. Валидация: Проверяем флаг is_completed
+    incomplete_routes = [r.route_name for r in routes if not r.is_completed]
+    
+    if incomplete_routes:
+        flash(f'Ошибка! Следующие маршруты не заполнены до конца: {", ".join(incomplete_routes)}. Заполните их перед генерацией.', 'danger')
+        return redirect(url_for('route_list'))
+
+    # 4. Генерация файла
+    buffer = io.BytesIO()
+    
+    # Вспомогательная функция для записи одной строки (для шапки)
+    def write_line(text):
+        buffer.write((text + '\r\n').encode('cp866', errors='replace'))
+
+    try:
+        # --- ШАПКА ФАЙЛА (Берем из ПЕРВОГО маршрута) ---
+        # По условию задачи шапка одна на файл.
+        first_route = routes[0]
+        
+        current_date = datetime.now().strftime("%y%m%d")
+        rr = str(first_route.region_code).zfill(2)
+        tttt = str(first_route.carrier_id).zfill(4)
+        dddd = str(first_route.unit_id).zfill(4)
+        v = str(first_route.decimal_places)
+
+        header_line = f"{rr};{tttt};{dddd};{current_date};{v}"
+        write_line(header_line)
+
+        # --- ТЕЛА МАРШРУТОВ ---
+        for route in routes:
+            # Используем нашу функцию рефакторинга
+            write_route_body_to_buffer(buffer, route)
+
+        # --- ОТПРАВКА ---
+        buffer.seek(0)
+        filename = f"TRFZ_BULK_{current_date}_({len(routes)}routes).txt"
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='text/plain'
+        )
+
+    except Exception as e:
+        print(f"Error generating bulk config: {e}")
         flash(f'Ошибка при генерации файла: {e}', 'danger')
         return redirect(url_for('route_list'))
