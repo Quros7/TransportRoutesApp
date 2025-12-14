@@ -84,36 +84,6 @@ def route_list():
     return render_template('route_list.html', routes=routes, csrf_token=csrf_token)
 
 
-# # --- Создание маршрута (Этап 1: Общая информация и Тарифы) ---
-# @app.route('/route/new', methods=['GET', 'POST'])
-# @login_required
-# def create_route_info():
-#     form = RouteInfoForm()
-    
-#     if form.validate_on_submit():
-#         # Сохраняем общую информацию и тарифы
-#         new_route = Route(
-#             user_id=current_user.id,
-#             route_name=form.route_name.data,
-#             carrier_info=form.carrier_info.data,
-#             transport_type=form.transport_type.data,
-#             # Преобразуем данные тарифов в нужный формат JSON
-#             tariffs=[
-#                 {"id": i + 1, "name": t.tariff_name.data} 
-#                 for i, t in enumerate(form.tariffs.entries)
-#             ],
-#             stops=[],         # Инициализация пустым списком
-#             price_matrix=[]   # Инициализация пустой матрицей
-#         )
-#         db.session.add(new_route)
-#         db.session.commit()
-#         flash('Общая информация сохранена. Перейдите к добавлению остановок.', 'success')
-#         # Перенаправление на следующий этап
-#         return redirect(url_for('edit_route_stops', route_id=new_route.id))
-        
-#     return render_template('route_info_form.html', form=form, title='Создание маршрута: Шаг 1')
-
-
 # --- Создание ИЛИ Редактирование Общей информации (Шаг 1) ---
 # route_id необязателен. Если он есть, мы редактируем.
 @app.route('/route/edit/info', defaults={'route_id': None}, methods=['GET', 'POST'])

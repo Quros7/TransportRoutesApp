@@ -104,16 +104,21 @@ class StopForm(FlaskForm):
 
 # 1. Форма для Общей информации (Шаг 1)
 class RouteInfoForm(FlaskForm):
-    route_name = StringField('Название маршрута', validators=[DataRequired(), Length(max=30)])
-    
-    carrier_id = StringField('ID Перевозчика (напр., 7012)', validators=[DataRequired(), Length(min=1, max=10), Regexp(r'^\d+$', message='ID должен содержать только цифры.')])
-    unit_id = StringField('ID Подразделения (напр., 0001)', validators=[DataRequired(), Length(min=1, max=10), Regexp(r'^\d+$', message='ID должен содержать только цифры.')])
-    route_number = StringField('Номер маршрута (напр., 854)', validators=[DataRequired(), Length(min=1, max=10), Regexp(r'^\d+$', message='Номер должен содержать только цифры.')])
-    region_code = StringField('Код региона (напр., 66)', validators=[DataRequired(), Length(min=1, max=5), Regexp(r'^\d+$', message='Код должен содержать только цифры.')])
-    
-    # Поле для точности после запятой (обычно 2)
+    region_code = StringField('Код региона (напр., 66)', validators=[DataRequired(), Length(min=1, max=2), Regexp(r'^\d+$', message='Код должен содержать только цифры (максимум 2).')],
+                              filters=[lambda x: x.zfill(2) if x else x ])
+    carrier_id = StringField('ID Перевозчика (напр., 7012)', validators=[DataRequired(), Length(min=1, max=4), Regexp(r'^\d+$', message='ID должен содержать только цифры (максимум 4).')],
+                            filters=[lambda x: x.zfill(4) if x else x ])  # Фильтр: заполнить строку нулями до длины 4
+    unit_id = StringField('ID Подразделения (напр., 0001)', validators=[DataRequired(), Length(min=1, max=4), Regexp(r'^\d+$', message='ID должен содержать только цифры (максимум 4).')],
+                          filters=[lambda x: x.zfill(4) if x else x ])
+    # Поле для точности цен после запятой (обычно 2)
     decimal_places = SelectField('Кол-во знаков после запятой (для цен)', choices=[('0', '0'), ('1', '1'), ('2', '2')], validators=[DataRequired()])
     
+
+    route_name = StringField('Название маршрута', validators=[DataRequired(), Length(max=30)])
+
+    route_number = StringField('Номер маршрута (напр., 854)', validators=[DataRequired(), Length(min=1, max=6), Regexp(r'^.+$', message='Номер должен состоять из максимум 6 символов.')],
+                               filters=[lambda x: x.zfill(6) if x else x ])
+
     transport_type = SelectField('Тип транспорта', 
                                 choices=list(TRANSPORT_TYPE_CHOICES.items()), 
                                 validators=[DataRequired()])
@@ -129,7 +134,7 @@ class RouteInfoForm(FlaskForm):
     #     ('0x80', 'Поезд (пригородный) (80)'),
     # ], validators=[DataRequired()])
     
-    # Теперь это Тарифные таблицы (FieldList)
+    # Тарифные таблицы (FieldList)
     tariff_tables = FieldList(
         FormField(TariffTableEntryForm), 
         min_entries=1, 
