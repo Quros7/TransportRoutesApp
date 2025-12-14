@@ -252,30 +252,32 @@ def edit_route_stops(route_id):
     # 1. ОБРАБОТКА POST-ЗАПРОСА
     if form.validate_on_submit():
         
-        # ----------------------------------------------------------------------
-        # A. ЛОГИКА ДОБАВЛЕНИЯ НОВОЙ ОСТАНОВКИ
-        # Проверяем, была ли нажата кнопка 'add_stop'
-        # ----------------------------------------------------------------------
-        if form.add_stop.data:
-            # Append_entry добавляет пустой элемент в FieldList
-            form.stops.append_entry()
-            flash('Новая остановка добавлена. Введите данные.', 'info')
+        # # ----------------------------------------------------------------------
+        # # A. ЛОГИКА ДОБАВЛЕНИЯ НОВОЙ ОСТАНОВКИ
+        # # Проверяем, была ли нажата кнопка 'add_stop'
+        # # ----------------------------------------------------------------------
+        # if form.add_stop.data:
+        #     # Append_entry добавляет пустой элемент в FieldList
+        #     form.stops.append_entry()
+        #     flash('Новая остановка добавлена. Введите данные.', 'info')
             
-            # Рендерим шаблон, чтобы показать добавленное поле, 
-            # но не сохраняем в базу.
-            return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
+        #     # Рендерим шаблон, чтобы показать добавленное поле, 
+        #     # но не сохраняем в базу.
+        #     return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
             
         # ----------------------------------------------------------------------
         # B. ЛОГИКА СОХРАНЕНИЯ И ПЕРЕХОДА К ШАГУ 3 (если нажата next_step)
         # Assuming your 'next_step' button is named as such in RouteStopsForm
         # ----------------------------------------------------------------------
-        # Проверяем, была ли нажата кнопка 'next_step' (или ваше имя кнопки SubmitField)
-        elif hasattr(form, 'next_step') and form.next_step.data: # Используем getattr/hasattr для безопасности
+        # Проверяем, что была нажата именно кнопка сохранения (next_step)
+        # Эта проверка технически избыточна, т.к. только next_step является submit-кнопкой
+        # и только она приведет к успешной валидации, но оставим её для явности:
+        if hasattr(form, 'next_step') and form.next_step.data: # Используем getattr/hasattr для безопасности
             
             stop_data = []
             for stop_entry in form.stops.entries:
                 
-                # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Преобразование Decimal в float
+                # Преобразование Decimal в float
                 # Это должно быть float для корректной JSON-сериализации.
                 try:
                     km_value = float(stop_entry.km_distance.data)
@@ -295,8 +297,6 @@ def edit_route_stops(route_id):
                 route.stops = stop_data
                 
                 # TODO: Добавить логику инициализации price_matrix здесь!
-                # new_stop_count = len(stop_data)
-                # old_stop_count = len(route.price_matrix)
                 
                 db.session.commit()
                 flash('Остановки сохранены. Переход к Шагу 3.', 'success')

@@ -192,7 +192,7 @@ class RouteStopsForm(FlaskForm):
     stops = FieldList(FormField(StopForm), min_entries=1, label='Остановки')
 
     # save_and_continue = SubmitField('Сохранить и перейти к ценам')
-    add_stop = SubmitField('Добавить остановку') # Используется на фронтенде для JS
+    # add_stop = SubmitField('Добавить остановку') # Используется на фронтенде для JS | ПОЛЕ УДАЛЕНО
     # SubmitField для перехода к следующему шагу
     next_step = SubmitField('Сохранить остановки и перейти к ценам (Шаг 3)')
     

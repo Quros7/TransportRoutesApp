@@ -29,7 +29,7 @@
                                 {# ИСПРАВЛЕНИЕ 2: Запрет редактирования расстояния для Остановки 0 #}
                                 {% set base_attrs = {
                                     'class': 'form-control distance-input',
-                                    'placeholder': '0,00',
+                                    'placeholder': '0.00',
                                     'data-index': loop.index0
                                 } %}
 
@@ -70,7 +70,11 @@
             </div>
         {% else %}
             {# Для остальных типов разрешаем добавлять остановки #}
-            {{ form.add_stop(class="btn btn-secondary mb-4") }}
+            <button type="button" 
+                    class="btn btn-secondary mb-4" 
+                    onclick="addStopEntry()">
+                Добавить остановку
+            </button>
         {% endif %}
 
         <div class="mt-4">
