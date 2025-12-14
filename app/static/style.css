@@ -2,6 +2,15 @@ body {
     margin-bottom: 20px;
 }
 
+.index-list {
+    padding-left: 80px;
+    font-weight: normal;
+}
+
+.index-desc-small {
+    font-size: 18px;
+}
+
 /* CSS для размещения поля и кнопки в одну линию */
 .password-toggle-container {
     /* Только flexbox для расположения */
