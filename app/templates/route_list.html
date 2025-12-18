@@ -17,6 +17,7 @@
         <form method="POST" action="{{ url_for('generate_bulk_config') }}" id="bulk-generate-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
+            <!--
             {# Панель массовых действий: Кнопка генерации + Поля шапки #}
             <div class="mb-3 p-3 bg-light border rounded">
                 <h4>Параметры шапки объединённого конфигурационного файла:</h4>
@@ -56,6 +57,7 @@
                     </div>
                 </div>
             </div>
+            -->
 
             <div class="table-responsive">
                 <table class="table table-striped table-hover align-middle">
@@ -68,14 +70,14 @@
                                     {# <label class="form-check-label" for="select-all">Выбрать все</label> #}
                                 </div>
                             </th>
-                            <th scope="col">№</th>
+                            <th class="text-center" scope="col">№</th>
                             <th scope="col">Название маршрута</th>
-                            <th scope="col">Перевозчик (ID)</th>
+                            <th class="text-center" scope="col">Перевозчик (ID)</th>
                             <th scope="col">Тип транспорта</th>
-                            <th scope="col">Остановки</th>
-                            <th scope="col">Тарифы</th>
+                            <th class="text-center" scope="col">Остановки</th>
+                            <th class="text-center" scope="col">Тарифы</th>
                             <th scope="col">Статус</th> 
-                            <th scope="col" class="text-center" style="min-width: 250px;">Действия</th>
+                            <th class="text-center" scope="col" class="text-center" style="min-width: 250px;">Действия</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -89,7 +91,7 @@
                                 <td>
                                     <strong>{{ route.route_name }}</strong>
                                 </td>
-                                <td>{{ route.carrier_id }}</td>
+                                <td class="text-center">{{ route.carrier_id }}</td>
                                 <td>
                                     {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
                                 </td>
@@ -123,12 +125,14 @@
                                        data-bs-toggle="tooltip" title="Редактировать матрицу цен">
                                         <i class="fas fa-dollar-sign"></i> Цены
                                     </a>
-
+                                    
+                                    <!--
                                     <a href="{{ url_for('generate_config', route_id=route.id) }}" 
                                          class="btn btn-sm btn-primary me-2"
                                          data-bs-toggle="tooltip" title="Скачать TRFZ файл">
                                          <i class="fas fa-download"></i> Конфиг
                                      </a>
+                                    -->
                                     
                                     <form method="POST" action="{{ url_for('delete_route', route_id=route.id) }}" class="m-0 p-0">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
