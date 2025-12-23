@@ -81,7 +81,7 @@
                                         </td>
                                     {% else %}
                                         {# Ячейка не требуется (j <= i) #}
-                                        <td class="bg-light">
+                                        <td class="bg-light" data-start-index="{{ i }}" data-end-index="{{ j }}">
                                             {# 💥 Для диагонали (i==j) не-городских маршрутов можно добавить пометку #}
                                             {% if i == j and not is_city_route %}
                                                 <span class="text-muted small">Внутризоновая</span>
@@ -110,54 +110,87 @@
 {% block scripts %}
 {{ super() }}
 <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('.price-input');
+        const mainTable = document.querySelector('.price-matrix'); 
+
+        inputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                const td = this.closest('td');
+                const tr = td.closest('tr'); 
+
+                // Оставляем только эти две переменные
+                const curI = parseInt(td.getAttribute('data-start-index'));
+                const curJ = parseInt(td.getAttribute('data-end-index'));
+
+                // 1. Подсвечиваем СТРОКУ (от начала до текущей ячейки)
+                tr.querySelectorAll('td[data-end-index]').forEach(el => {
+                    const jVal = parseInt(el.getAttribute('data-end-index'));
+                    if (jVal <= curJ) {
+                        el.classList.add('table-row-highlight');
+                    }
+                });
+
+                // 2. Подсвечиваем СТОЛБЕЦ (от верха до текущей ячейки)
+                mainTable.querySelectorAll(`td[data-end-index="${curJ}"]`).forEach(el => {
+                    const iVal = parseInt(el.getAttribute('data-start-index'));
+                    if (iVal <= curI) {
+                        el.classList.add('table-col-highlight');
+                    }
+                });
+
+                // 3. Подсвечиваем заголовки
+                // Строка
+                const rowHeader = tr.querySelector('th[scope="row"]');
+                if (rowHeader) rowHeader.classList.add('table-active-header');
+
+                // Колонка (Исправлено: используем mainTable вместо table)
+                const colHeader = mainTable.querySelector(`thead th:nth-child(${curJ + 2})`);
+                if (colHeader) colHeader.classList.add('table-active-header');
+                
+                // Сама активная ячейка
+                td.classList.add('table-active-cell');
+            });
+
+            input.addEventListener('blur', function() {
+                if (mainTable) {
+                    mainTable.querySelectorAll('.table-row-highlight, .table-col-highlight, .table-active-header, .table-active-cell')
+                        .forEach(el => {
+                            el.classList.remove('table-row-highlight', 'table-col-highlight', 'table-active-header', 'table-active-cell');
+                        });
+                }
+            });
+        });
+    });
+
     /**
-     * Собирает матрицу цен → кладёт JSON в скрытое поле →
-     * предотвращает стандартный submit → отправляет форму вручную.
+     * Ваша существующая функция сбора данных (без изменений)
      */
     function collectMatrixData(event) {
-        // Блокируем мгновенную отправку submit-кнопкой WTForms
-        if (event) {
-            event.preventDefault();
-        }
-
+        if (event) event.preventDefault();
         const stopsCount = {{ route.stops | length }};
-
         let matrix = [];
         for (let i = 0; i < stopsCount; i++) {
             matrix[i] = new Array(stopsCount).fill(null);
         }
-
         const cells = document.querySelectorAll('.price-matrix td[data-start-index]');
-
         cells.forEach(cell => {
             const i = parseInt(cell.getAttribute('data-start-index'));
             const j = parseInt(cell.getAttribute('data-end-index'));
-
             let priceData = {};
             const inputs = cell.querySelectorAll('.price-input');
-
             inputs.forEach(input => {
                 const tariffId = input.getAttribute('data-tariff-id');
                 let value = input.value.trim();
                 let numericValue = null;
-
                 if (value !== '' && !isNaN(parseFloat(value))) {
                     numericValue = parseFloat(parseFloat(value).toFixed(2));
                 }
-
                 priceData[tariffId] = numericValue || 0;
             });
-
             matrix[i][j] = priceData;
         });
-
-        const jsonString = JSON.stringify(matrix);
-        document.getElementById('price-matrix-data').value = jsonString;
-
-        // === DEBUG ===
-        console.log("DEBUG: JSON-string записан:", jsonString.slice(0, 200) + "...");
-
-        // Теперь, когда JSON гарантированно записан, отправляем форму
+        document.getElementById('price-matrix-data').value = JSON.stringify(matrix);
         document.getElementById('price-matrix-form').submit();
         return false;
     }

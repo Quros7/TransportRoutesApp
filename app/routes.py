@@ -530,12 +530,7 @@ def generate_config(route_id):
     buffer = io.BytesIO()
 
     try:
-        # Вспомогательная функция для записи строки в кодировке CP866
-        def write_line(text):
-            # Добавляем перенос строки Windows-style (\r\n)
-            # errors='replace' заменит символы, которых нет в CP866, на '?'
-            buffer.write((text + '\r\n').encode('cp866', errors='replace'))
-
+        current_date = datetime.now().strftime("%y%m%d")
         # ==========================================
         # 1. ЗАГОЛОВОК ФАЙЛА
         # RR;TTTT;DDDD;YYMMDD;V
@@ -546,126 +541,17 @@ def generate_config(route_id):
         # YYMMDD - Текущая дата
         # V - Кол-во знаков после запятой (decimal_places)
         
-        current_date = datetime.now().strftime("%y%m%d")
-        
         # Форматируем с ведущими нулями (zfill)
         rr = str(route.region_code).zfill(2)
         tttt = str(route.carrier_id).zfill(4)
         dddd = str(route.unit_id).zfill(4)
         v = str(route.decimal_places)
 
-        header_line = f"{rr};{tttt};{dddd};{current_date};{v}"
-        write_line(header_line)
+        # Пишем шапку вручную (или создайте write_line внутри)
+        buffer.write(f"{rr};{tttt};{dddd};{current_date};{v}\r\n".encode('cp866'))
 
-        # ==========================================
-        # 2. ОПИСАНИЕ МАРШРУТА (Тэг R)
-        # R;RouteID;Type;Tabs;ZoneInAll;RouteName
-        # ==========================================
-        # RouteID - номер маршрута (макс 6)
-        # Type - тип транспорта (без '0x', например '02')
-        # ZoneInAll - кол-во остановок
-        # RouteName - имя (макс 30)
-        # Tabs - кол-во тарифных таблиц
-
-        route_id_str = str(route.route_number)[:6]
-        
-        # Убираем '0x' из типа транспорта, если он там есть (0x02 -> 02)
-        trans_type = route.transport_type.replace('0x', '')
-
-        zones_count = len(route.stops)
-        
-        # Обрезаем имя до 30 символов
-        route_name = route.route_name[:30]
-
-        tabs_count = len(route.tariff_tables)
-
-        r_line = f"R;{route_id_str};{trans_type};{zones_count};{route_name};{tabs_count}"
-        write_line(r_line)
-
-        # ==========================================
-        # 3. СПИСОК ОСТАНОВОК (ЗОН)
-        # ZoneNo;Km;ZoneName
-        # ==========================================
-        # ZoneNo - номер (0..N)
-        # Km - расстояние (99.99)
-        # ZoneName - имя (макс 19)
-
-        for i, stop in enumerate(route.stops):
-            zone_no = str(i) # Без ведущего нуля согласно примеру (0, 1, 2...)
-            km_val = stop['km'] # У нас уже сохранена строка "X.XX"
-            
-            # Обрезаем имя до 19 символов
-            zone_name = stop['name'][:19]
-            
-            s_line = f"{zone_no};{km_val};{zone_name}"
-            write_line(s_line)
-
-        # ==========================================
-        # 4. ТАРИФНЫЕ ТАБЛИЦЫ (Tabs)
-        # TabN;SS...
-        # ==========================================
-        
-        for table in route.tariff_tables:
-            tab_n = table['tab_number']
-            # Берем сохраненную строку серий (например "15;20;58" или "89")
-            ss_codes = table['ss_series_codes']
-            
-            # Формируем строку в зависимости от типа.
-            # Если это Таблица 1 (tab_n=1), table_type_code должен быть '02'.
-            # Если другие, table_type_code это P/T/F.
-            # В нашей структуре:
-            # table_type_code уже хранит '02' или 'P'.
-            # ss_series_codes хранит остальное.
-            
-            # Пример: 1;02;15;20...
-            # Пример: 2;P;89
-            
-            t_line = f"{tab_n};{table['table_type_code']};{ss_codes}"
-            write_line(t_line)
-
-        # ==========================================
-        # 5. МАТРИЦА ЦЕН
-        # AA;ZZ;Price1;Price2...
-        # ==========================================
-        # Проходим только по верхнему треугольнику (включая диагональ), где start <= end
-        
-        # Множитель для валюты (если V=2, то 1.00 -> 100)
-        multiplier = 10 ** int(route.decimal_places)
-
-        for i in range(zones_count):
-            for j in range(zones_count):
-                # Пишем только если конечная остановка >= начальной (движение вперед)
-                if j >= i:
-                    prices_list = []
-                    
-                    # Для каждой тарифной таблицы берем цену
-                    for table in route.tariff_tables:
-                        tab_id_str = str(table['tab_number'])
-                        
-                        # Пытаемся получить цену из JSON-матрицы
-                        # Структура: route.price_matrix[i][j][tab_id_str]
-                        try:
-                            # Получаем значение (float или int)
-                            raw_price = route.price_matrix[i][j].get(tab_id_str, 0)
-                            
-                            # Преобразуем в целое число копеек (440.00 -> 44000)
-                            price_int = int(float(raw_price) * multiplier)
-                            
-                            # Если 0, то пишем 0. 
-                            # Спецификация говорит: "при нулевом значении никакое число не отображается".
-                            # НО в примере: "0;0;0;0;0" и "1;2;4600;2300". 
-                            # Если "0" значит "невозможно проехать", а "-" значит "бесплатно".
-                            # Пока будем писать число (0 или 44000), как в примере.
-                            prices_list.append(str(price_int))
-                            
-                        except (IndexError, AttributeError, ValueError):
-                            # Если данных нет, пишем 0
-                            prices_list.append("0")
-                    
-                    # Собираем строку: i;j;price1;price2...
-                    prices_str = ";".join(prices_list)
-                    m_line = f"{i};{j};{prices_str}"
-                    write_line(m_line)
+        # Тело (используем общую функцию)
+        write_route_body_to_buffer(buffer, route, v)
 
         # Подготовка к отправке
         buffer.seek(0)
@@ -673,17 +559,12 @@ def generate_config(route_id):
         # Формируем имя файла (TRFZ_номер_дата.txt)
         filename = f"TRFZ_{route.route_number}_{current_date}.txt"
         
-        return send_file(
-            buffer,
-            as_attachment=True,
-            download_name=filename,
-            mimetype='text/plain'
-        )
+        return send_file(buffer, as_attachment=True, 
+                         download_name=filename, 
+                         mimetype='text/plain')
 
     except Exception as e:
-        # Логирование ошибки (опционально)
-        print(f"Error generating config: {e}")
-        flash(f'Ошибка при генерации файла: {e}', 'danger')
+        flash(f'Ошибка: {e}', 'danger')
         return redirect(url_for('route_list'))
 
 

@@ -1,10 +1,29 @@
+def normalize_for_cp866(text):
+    """Заменяет спецсимволы Unicode на аналоги, доступные в CP866."""
+    if not text:
+        return ""
+    replacements = {
+        '—': '-',  # Длинное тире
+        '–': '-',  # Среднее тире
+        '«': '"',  # Кавычки
+        '»': '"',
+        '„': '"',
+        '“': '"',
+        '№': 'No'  # Номер
+    }
+    for search, replace in replacements.items():
+        text = text.replace(search, replace)
+    return text
+
+
 def write_route_body_to_buffer(buffer, route, decimal_places_for_config):
     """
     Записывает информацию о маршруте (начиная с тега R) в переданный буфер, используя указанную точность цен.
     Кодировка CP866.
     """
     def write_line(text):
-        buffer.write((text + '\r\n').encode('cp866', errors='replace'))
+        clean_text = normalize_for_cp866(text)
+        buffer.write((clean_text + '\r\n').encode('cp866', errors='replace'))
 
     # ==========================================
     # 2. ОПИСАНИЕ МАРШРУТА (Тэг R)
