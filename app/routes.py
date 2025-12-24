@@ -264,12 +264,21 @@ def create_or_edit_route_info(route_id):
         
         else:
             # --- Обновление существующего объекта Route ---
+
+            # 1. Запоминаем критические состояния ДО обновления
+            old_transport_type = route.transport_type
+            old_tariffs = route.tariff_tables # Это список словарей JSON
+
+            # 2. Обновляем поля
             for key, value in data_to_save.items():
                 setattr(route, key, value)
             
-            # Если изменилось количество тарифов/зон, это может потребовать сброса матрицы цен.
-            # Пока мы не реализуем логику проверки изменения структуры, просто сохраняем.
-            # Если логика проверки будет добавлена, она должна быть здесь.
+            # 3. ЛОГИКА УМНОГО СБРОСА
+            # Сравниваем тип транспорта и состав тарифных таблиц
+            # В Python списки словарей (tariff_tables_data vs old_tariffs) сравниваются глубоко по значениям
+            if old_transport_type != form.transport_type.data or old_tariffs != tariff_tables_data:
+                route.is_completed = False  # Матрица цен теперь требует перепроверки
+                flash('Структура тарифов или тип транспорта изменились. Пожалуйста, проверьте цены на Шаге 3.', 'info')
             
             db.session.commit()
             flash('Изменения сохранены.', 'success')
@@ -300,26 +309,6 @@ def edit_route_stops(route_id):
     # 1. ОБРАБОТКА POST-ЗАПРОСА
     if form.validate_on_submit():
         
-        # # ----------------------------------------------------------------------
-        # # A. ЛОГИКА ДОБАВЛЕНИЯ НОВОЙ ОСТАНОВКИ
-        # # Проверяем, была ли нажата кнопка 'add_stop'
-        # # ----------------------------------------------------------------------
-        # if form.add_stop.data:
-        #     # Append_entry добавляет пустой элемент в FieldList
-        #     form.stops.append_entry()
-        #     flash('Новая остановка добавлена. Введите данные.', 'info')
-            
-        #     # Рендерим шаблон, чтобы показать добавленное поле, 
-        #     # но не сохраняем в базу.
-        #     return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
-            
-        # ----------------------------------------------------------------------
-        # B. ЛОГИКА СОХРАНЕНИЯ И ПЕРЕХОДА К ШАГУ 3 (если нажата next_step)
-        # Assuming your 'next_step' button is named as such in RouteStopsForm
-        # ----------------------------------------------------------------------
-        # Проверяем, что была нажата именно кнопка сохранения (next_step)
-        # Эта проверка технически избыточна, т.к. только next_step является submit-кнопкой
-        # и только она приведет к успешной валидации, но оставим её для явности:
         if hasattr(form, 'next_step') and form.next_step.data: # Используем getattr/hasattr для безопасности
             
             stop_data = []
@@ -341,13 +330,16 @@ def edit_route_stops(route_id):
                 })
 
             if route is not None:
+                # 1. ЛОГИКА УМНОГО СБРОСА
+                # Сравниваем старый список остановок из БД с новым сформированным списком
+                # В Python списки словарей сравниваются по значению, что нам и нужно
+                if route.stops != stop_data:
+                    route.is_complete = False # Данные реально изменились, сбрасываем готовность
+
                 # 2. Сохранение данных
                 route.stops = stop_data
-                
-                # TODO: Добавить логику инициализации price_matrix здесь!
-                
                 route.stops_set = True
-                route.is_complete = False # Сбрасываем флаг цен, так как остановки могли измениться
+                
                 db.session.commit()
                 flash('Остановки сохранены. Переход к Шагу 3.', 'success')
                 

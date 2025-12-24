@@ -107,28 +107,46 @@
                                     {% endif %}
                                 </td>
                                 <td class="d-flex justify-content-center align-items-center"> 
-                                    {# Кнопки действий без изменений #}
+
+                                    {# Кнопки действий #}
                                     <a href="{{ url_for('create_or_edit_route_info', route_id=route.id) }}" 
-                                       class="btn btn-sm btn-outline-success me-2" 
+                                       class="btn btn-sm btn-success me-2" 
                                        data-bs-toggle="tooltip" title="Редактировать информацию">
                                         <i class="fas fa-edit"></i> Инфо
                                     </a>
-                                    <a href="{{ url_for('edit_route_stops', route_id=route.id) }}" 
-                                       class="btn btn-sm btn-outline-success me-2" 
-                                       data-bs-toggle="tooltip" title="Редактировать остановки">
-                                        <i class="fas fa-map-marker-alt"></i> Остановки
-                                    </a>
+                                    
+                                    {% if route.stops_set %}
+                                        <span data-bs-toggle="tooltip" title="Редактировать остановки">
+                                            <a href="{{ url_for('edit_route_stops', route_id=route.id) }}" 
+                                            class="btn btn-sm btn-success me-2">
+                                                <i class="fas fa-map-marker-alt"></i> Остановки
+                                            </a>
+                                        </span>
+                                    {% else %}
+                                        <span data-bs-toggle="tooltip" title="Редактировать остановки">
+                                            <a href="{{ url_for('edit_route_stops', route_id=route.id) }}" 
+                                            class="btn btn-sm btn-outline-success me-2">
+                                                <i class="fas fa-map-marker-alt"></i> Остановки
+                                            </a>
+                                        </span>
+                                    {% endif %}
+
+                                    {#<a href="{{ url_for('edit_route_stops', route_id=route.id) }}" #}
+                                    {#   class="btn btn-sm btn-outline-success me-2" #}
+                                    {#   data-bs-toggle="tooltip" title="Редактировать остановки">#}
+                                    {#    <i class="fas fa-map-marker-alt"></i> Остановки#}
+                                    {#</a>#}
 
                                     {% if route.stops_set %}
                                         <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
                                             <a href="{{ url_for('edit_route_prices', route_id=route.id) }}" 
-                                            class="btn btn-sm btn-outline-success me-2">
+                                            class="btn btn-sm btn-success me-2">
                                                 <i class="fas fa-dollar-sign"></i> Цены
                                             </a>
                                         </span>
                                     {% else %}
                                         <span data-bs-toggle="tooltip" title="Сначала укажите остановки!">
-                                            <a href="#" class="btn btn-sm btn-outline-secondary me-2 disabled" style="pointer-events: none;">
+                                            <a href="#" class="btn btn-sm btn-outline-success me-2 disabled" style="pointer-events: none;">
                                                 <i class="fas fa-dollar-sign"></i> Цены
                                             </a>
                                         </span>
@@ -140,11 +158,27 @@
                                     {#    <i class="fas fa-dollar-sign"></i> Цены#}
                                     {#</a>#}
 
-                                    <a href="{{ url_for('generate_config', route_id=route.id) }}" 
-                                         class="btn btn-sm btn-primary me-2"
-                                         data-bs-toggle="tooltip" title="Скачать TRFZ файл">
-                                         <i class="fas fa-download"></i> Конфиг
-                                     </a>
+                                    {#<a href="{{ url_for('generate_config', route_id=route.id) }}" #}
+                                    {#     class="btn btn-sm btn-primary me-2"#}
+                                    {#     data-bs-toggle="tooltip" title="Скачать файл конфигурации">#}
+                                    {#     <i class="fas fa-download"></i> Конфиг#}
+                                    {#</a>#}
+
+                                    {% if route.is_completed %}
+                                        <span data-bs-toggle="tooltip" title="Скачать файл конфигурации">
+                                            <a href="{{ url_for('generate_config', route_id=route.id) }}" 
+                                                class="btn btn-sm btn-primary me-2">
+                                                <i class="fas fa-download"></i> Конфиг
+                                            </a>
+                                        </span>
+                                    {% else %}
+                                        <span data-bs-toggle="tooltip" title="Сначала заполните данные маршрута!">
+                                            <a href="{{ url_for('generate_config', route_id=route.id) }}" 
+                                                class="btn btn-sm btn-primary me-2 disabled">
+                                                <i class="fas fa-download"></i> Конфиг
+                                            </a>
+                                        </span>
+                                    {% endif %}
                                     
                                     <form method="POST" action="{{ url_for('delete_route', route_id=route.id) }}" class="m-0 p-0">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

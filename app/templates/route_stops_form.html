@@ -76,8 +76,14 @@
                 Добавить остановку
             </button>
         {% endif %}
-
-        <div class="mt-4">
+        
+        {# Кнопки Назад и Сохранить #}
+        <div class="mt-4 d-flex justify-content-between">
+            <a href="{{ url_for('create_or_edit_route_info', route_id=route.id) }}" 
+            class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Назад (Информация о маршруте и тарифах)
+            </a>
+            
             {{ form.next_step(class="btn btn-primary") }}
         </div>
     </form>

@@ -95,14 +95,16 @@
                 </tbody>
             </table>
         </div>
-        
-        <div class="mt-4">
-            {# При нажатии вызывается JS-функция, которая собирает данные и отправляет форму #}
-            {# {{ form.save_prices(class="btn btn-success", onclick="return collectMatrixData(event)") }} #}
+
+        {# Кнопки Назад и Сохранить #}
+        <div class="mt-4 d-flex justify-content-between">
+            <a href="{{ url_for('edit_route_stops', route_id=route.id) }}" class="btn btn-outline-secondary">
+                <i class="bi bi-chevron-left"></i> Назад (Остановки)
+            </a>
+            
             <button type="button" id="save-prices-btn" class="btn btn-success" onclick="collectMatrixData(event)">
                 Сохранить цены
             </button>
-            <a href="{{ url_for('route_list') }}" class="btn btn-secondary">Отмена</a>
         </div>
     </form>
 {% endblock %}
