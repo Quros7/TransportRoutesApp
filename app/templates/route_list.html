@@ -138,12 +138,21 @@
                                     {#</a>#}
 
                                     {% if route.stops_set %}
-                                        <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
-                                            <a href="{{ url_for('edit_route_prices', route_id=route.id) }}" 
-                                            class="btn btn-sm btn-success me-2">
-                                                <i class="fas fa-dollar-sign"></i> Цены
-                                            </a>
-                                        </span>
+                                        {% if route.is_completed %}
+                                            <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
+                                                <a href="{{ url_for('edit_route_prices', route_id=route.id) }}" 
+                                                class="btn btn-sm btn-success me-2">
+                                                    <i class="fas fa-dollar-sign"></i> Цены
+                                                </a>
+                                            </span>
+                                        {% else %}
+                                            <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
+                                                <a href="{{ url_for('edit_route_prices', route_id=route.id) }}" 
+                                                class="btn btn-sm btn-outline-success me-2">
+                                                    <i class="fas fa-dollar-sign"></i> Цены
+                                                </a>
+                                            </span>
+                                        {% endif %}
                                     {% else %}
                                         <span data-bs-toggle="tooltip" title="Сначала укажите остановки!">
                                             <a href="#" class="btn btn-sm btn-outline-success me-2 disabled" style="pointer-events: none;">
