@@ -346,6 +346,8 @@ def edit_route_stops(route_id):
                 
                 # TODO: Добавить логику инициализации price_matrix здесь!
                 
+                route.stops_set = True
+                route.is_complete = False # Сбрасываем флаг цен, так как остановки могли измениться
                 db.session.commit()
                 flash('Остановки сохранены. Переход к Шагу 3.', 'success')
                 
@@ -386,6 +388,10 @@ def edit_route_prices(route_id):
     if not route:
         flash('Маршрут не найден.', 'danger')
         return redirect(url_for('route_list'))
+
+    if not route.stops_set:
+        flash("Сначала настройте список остановок!", "warning")
+        return redirect(url_for('edit_route_stops', route_id=route.id))
 
     # === Правильно: создаём форму БЕЗ request.form ===
     form = RoutePricesForm()
