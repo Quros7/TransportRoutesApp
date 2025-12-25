@@ -57,12 +57,16 @@ class TariffTableEntryForm(FlaskForm):
         DataRequired(),
         # ИСПРАВЛЕННОЕ РЕГУЛЯРНОЕ ВЫРАЖЕНИЕ
         Regexp(r'^(\d{2}|[A-Z])(;(\d{2}|[A-Z]))*$', 
-               message='Введите коды серий SS через ";". Каждая серия должна быть 2-значным числом (или буквенным кодом).')
+               message='Введите коды серий SS без пробелов через ";". Каждая серия должна быть 2-значным числом (или буквенным кодом).')
     ])
 
 
 # --- Подформа для ввода одной остановки ---
 class StopForm(FlaskForm):
+    class Meta:
+        # Это отключает CSRF именно для этой подформы
+        csrf = False
+
     stop_name = StringField('Название остановки', validators=[DataRequired(), Length(max=19)])
     # Добавим расстояние, необходимое для генерации файла конфигурации
     # km_distance = DecimalField('Расстояние (км от начальной точки)', places=2, validators=[DataRequired()], default=0.00)
@@ -216,7 +220,8 @@ class RouteStopsForm(FlaskForm):
         is_city_route = self.route and self.route.transport_type == '0x02'
         
         if not is_city_route and len(field.entries) < 2:
-            raise ValidationError('Пригородный/Междугородний маршрут должен содержать минимум 2 остановки (начальную и конечную).')
+            route_transport_type = TRANSPORT_TYPE_CHOICES.get(self.route.transport_type, self.route.transport_type)
+            raise ValidationError(f'Маршрут с типом транспортного средства {route_transport_type} должен содержать минимум 2 остановки (начальную и конечную).')
         
         # Если маршрут городской (0x02), и остановок больше 1, это ошибка,
         # но мы контролируем это на фронтенде и JS. На всякий случай:

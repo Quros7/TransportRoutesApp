@@ -297,79 +297,102 @@ def create_or_edit_route_info(route_id):
 @app.route('/route/edit/<int:route_id>/stops', methods=['GET', 'POST'])
 @login_required
 def edit_route_stops(route_id):
-    # Унифицированный запрос: ищем маршрут по ID и текущему пользователю
     route = db.session.scalar(
         sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id)
     )
     if route is None:
         abort(404)
-        
-    form = RouteStopsForm(obj=route, route=route)
+
+    if request.method == 'POST':
+        # Важный момент: WTForms сам разберет request.form, 
+        # если названия полей в JS (stops-N-...) совпадают с ожиданиями FieldList
+        form = RouteStopsForm(request.form, route=route)
+        # print(f"DEBUG: Полученные ключи формы: {list(request.form.keys())}")
+    else:
+        # Для GET создаем форму и наполняем её данными из БД
+        form = RouteStopsForm(route=route)
+        if route.stops:
+            form.stops.entries = [] 
+            for stop_data in route.stops:
+                try:
+                    km_val = float(stop_data.get('km', 0))
+                except (TypeError, ValueError):
+                    km_val = 0.0
+                form.stops.append_entry({'stop_name': stop_data['name'], 'km_distance': km_val})
+
+    # print(f"DEBUG: CSRF в форме: {form.csrf_token.data}")
+    # print(f"DEBUG: CSRF в запросе: {request.form.get('csrf_token')}")
+    # print(f"DEBUG: Ошибки формы до валидации: {form.errors}")
 
     # 1. ОБРАБОТКА POST-ЗАПРОСА
     if form.validate_on_submit():
+        # Проверяем, что нажата кнопка "Далее"
+        # if form.next_step.data:
+        new_stop_data = []
         
-        if hasattr(form, 'next_step') and form.next_step.data: # Используем getattr/hasattr для безопасности
+        # В WTForms внутри FieldList(FormField) данные доступны через .form
+        for entry in form.stops.entries:
+            name = entry.form.stop_name.data
+            try:
+                km = float(entry.form.km_distance.data)
+            except (TypeError, ValueError):
+                km = 0.0
             
-            stop_data = []
-            for stop_entry in form.stops.entries:
-                
-                # Преобразование Decimal в float
-                # Это должно быть float для корректной JSON-сериализации.
-                try:
-                    km_value = float(stop_entry.km_distance.data)
-                except (TypeError, ValueError):
-                    km_value = 0.00 # Fallback, хотя InputRequired должен предотвратить это
+            new_stop_data.append({
+                'name': name,
+                'km': f"{km:.2f}"
+            })
 
-                # Форматируем float в строку "X.XX" перед сохранением в JSON
-                km_value_str = f"{km_value:.2f}"
+        # ЛОГИКА УМНОГО СБРОСА
+        if route.stops != new_stop_data:
+            route.is_completed = False 
+            flash('Состав остановок изменился. Пожалуйста, проверьте цены.', 'warning')
 
-                stop_data.append({
-                    'name': stop_entry.stop_name.data,
-                    'km': km_value_str # <-- Теперь в JSON будет строка "0.00", "1.00", "2.00"
-                })
-
-            if route is not None:
-                # 1. ЛОГИКА УМНОГО СБРОСА
-                # Сравниваем старый список остановок из БД с новым сформированным списком
-                # В Python списки словарей сравниваются по значению, что нам и нужно
-                if route.stops != stop_data:
-                    route.is_completed = False # Данные реально изменились, сбрасываем готовность
-
-                # 2. Сохранение данных
-                route.stops = stop_data
-                route.stops_set = True
-                
-                db.session.commit()
-                flash('Остановки сохранены. Переход к Шагу 3.', 'success')
-                
-                # Переход к Шагу 3 (матрица цен). Используем правильный endpoint.
-                return redirect(url_for('edit_route_prices', route_id=route.id))
+        route.stops = new_stop_data
+        route.stops_set = True
+        db.session.commit()
         
+        flash('Остановки сохранены.', 'success')
+        return redirect(url_for('edit_route_prices', route_id=route.id))
+
+    # 2. ЕСЛИ ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)
+    elif request.method == 'POST':
+        # Собираем ошибки из всех уровней формы
+        for field, errors in form.errors.items():
+            if isinstance(errors, list):
+                for error in errors:
+                    if isinstance(error, str):
+                        flash(f"Ошибка в {field}: {error}", 'danger')
+            elif isinstance(errors, dict):
+                # Ошибки внутри FieldList (по индексам)
+                flash(f"Проверьте правильность заполнения полей остановок.", 'danger')
+
+    return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
+
         # Если ни одна из кнопок не была нажата (что маловероятно при form.validate_on_submit),
         # или если были другие submit-кнопки.
         # Fallthrough to render_template below for validation errors.
 
-    # 2. ОБРАБОТКА GET-ЗАПРОСА (инициализация данных)
-    if request.method == 'GET' and route.stops:
-        # Очищаем FieldList перед заполнением, чтобы избежать дублирования
-        form.stops.entries = [] 
-        for stop_data in route.stops:
-            # Преобразуем строку 'km' из БД обратно в float для формы
-            try:
-                km_for_form = float(stop_data['km'])
-            except (TypeError, ValueError):
-                # Если по какой-то причине значение некорректно, ставим 0.0
-                km_for_form = 0.0
+    # # 3. ОБРАБОТКА GET-ЗАПРОСА (инициализация данных)
+    # if request.method == 'GET' and route.stops:
+    #     # Очищаем FieldList перед заполнением, чтобы избежать дублирования
+    #     form.stops.entries = [] 
+    #     for stop_data in route.stops:
+    #         # Преобразуем строку 'km' из БД обратно в float для формы
+    #         try:
+    #             km_for_form = float(stop_data['km'])
+    #         except (TypeError, ValueError):
+    #             # Если по какой-то причине значение некорректно, ставим 0.0
+    #             km_for_form = 0.0
 
-            # При инициализации формы km_distance лучше передавать как str или float, 
-            # если он был сохранен как float, но DecimalField справится с float.
-            form.stops.append_entry(
-                {'stop_name': stop_data['name'], 'km_distance': km_for_form}
-            )
+    #         # При инициализации формы km_distance лучше передавать как str или float, 
+    #         # если он был сохранен как float, но DecimalField справится с float.
+    #         form.stops.append_entry(
+    #             {'stop_name': stop_data['name'], 'km_distance': km_for_form}
+    #         )
             
     # 3. РЕНДЕРИНГ ШАБЛОНА
-    return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
+    # return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
 
 
 # --- Форма с ценами за каждый отрезок пути (Этап 3) ---
