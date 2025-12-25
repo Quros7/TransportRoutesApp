@@ -189,16 +189,12 @@
                                         </span>
                                     {% endif %}
                                     
-                                    <form method="POST" action="{{ url_for('delete_route', route_id=route.id) }}" class="m-0 p-0">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                        
-                                        <button type="submit" 
-                                                class="btn btn-sm btn-danger" 
-                                                data-bs-toggle="tooltip" title="Удалить маршрут"
-                                                onclick="return confirm('Вы уверены, что хотите удалить маршрут {{ route.route_name }}? Это действие необратимо.');">
-                                            <i class="fas fa-trash"></i> Удалить
-                                        </button>
-                                    </form>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-danger" 
+                                            data-bs-toggle="tooltip" title="Удалить маршрут"
+                                            onclick="confirmDelete('{{ route.id }}', '{{ route.route_name }}');">
+                                        <i class="fas fa-trash"></i> Удалить
+                                    </button>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -207,6 +203,11 @@
             </div>
         </form>
         {# КОНЕЦ ФОРМЫ ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ #}
+
+        {# Скрытая форма для удаления #}
+        <form id="delete-route-form" method="POST" action="">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        </form>
     {% endif %}
 
 {% endblock %}
@@ -272,5 +273,14 @@
         // Первоначальное обновление счетчика
         updateCount();
     });
+
+    function confirmDelete(routeId, routeName) {
+        if (confirm('Вы уверены, что хотите удалить маршрут "' + routeName + '"? Это действие необратимо.')) {
+            const form = document.getElementById('delete-route-form');
+            // Динамически меняем action формы на нужный URL
+            form.action = "{{ url_for('delete_route', route_id=0) }}".replace('0', routeId);
+            form.submit();
+        }
+    }
 </script>
 {% endblock %}
