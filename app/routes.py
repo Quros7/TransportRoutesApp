@@ -1,6 +1,6 @@
 from app import app, db
 from app.models import User, Route
-from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm, BulkGenerateForm, EditProfileForm
+from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm, EditProfileForm #, BulkGenerateForm
 from flask import render_template, flash, redirect, url_for, request, abort, current_app, send_file
 from flask_login import current_user, login_user, logout_user, login_required
 import sqlalchemy as sa
@@ -69,9 +69,6 @@ def user(username):
         # Если пытаются посмотреть чужой профиль, перенаправляем на свой
         return redirect(url_for('user', username=current_user.username))
 
-    # user = db.first_or_404(sa.select(User).where(User.username == username))
-    # Теперь нам не нужно искать пользователя по имени, так как у нас есть current_user
-
     # 2. Инициализация формы: Загружаем текущие значения из объекта current_user
     # При GET-запросе: поля заполняются данными из БД.
     # При POST-запросе: поля заполняются данными из request.form, а старые данные 
@@ -132,31 +129,31 @@ def route_list():
     csrf_token = generate_csrf()
 
     # Инициализируем форму для массовой генерации
-    bulk_form = BulkGenerateForm() 
+    # bulk_form = BulkGenerateForm() 
 
     # 1. ПРИОРИТЕТ: Загружаем значения из ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ
     # Значения уже отфильтрованы и заполнены нулями благодаря дефолтам в модели
-    if current_user.default_region_code:
-        bulk_form.region_code.data = current_user.default_region_code
-    if current_user.default_carrier_id:
-        bulk_form.carrier_id.data = current_user.default_carrier_id
-    if current_user.default_unit_id:
-        bulk_form.unit_id.data = current_user.default_unit_id
+    # if current_user.default_region_code:
+    #     bulk_form.region_code.data = current_user.default_region_code
+    # if current_user.default_carrier_id:
+    #     bulk_form.carrier_id.data = current_user.default_carrier_id
+    # if current_user.default_unit_id:
+    #     bulk_form.unit_id.data = current_user.default_unit_id
         
     # 2. ЗАПАСНОЙ ВАРИАНТ: Если профиль пуст (чего не должно быть при установке defaults),
     # или если нужно инициализировать decimal_places (которого нет в профиле), берем из первого маршрута.
-    if routes: 
-        last_route = routes[0] 
+    # if routes: 
+    #     last_route = routes[0] 
         
-        # region_code, carrier_id, unit_id перезаписываются только если нет в профиле (не обязательно)
-        # Для decimal_places берем значение из первого маршрута, т.к. оно не хранится в профиле
-        bulk_form.decimal_places.data = last_route.decimal_places if hasattr(last_route, 'decimal_places') else '2'
+    #     # region_code, carrier_id, unit_id перезаписываются только если нет в профиле (не обязательно)
+    #     # Для decimal_places берем значение из первого маршрута, т.к. оно не хранится в профиле
+    #     bulk_form.decimal_places.data = last_route.decimal_places if hasattr(last_route, 'decimal_places') else '2'
 
     return render_template('route_list.html', 
                            routes=routes, 
                         #    TRANSPORT_TYPES=TRANSPORT_TYPE_CHOICES,
-                           csrf_token=csrf_token, # Это нужно для формы
-                           bulk_form=bulk_form) # <-- ПЕРЕДАЕМ НОВУЮ ФОРМУ
+                           csrf_token=csrf_token)#, # Это нужно для формы
+                           #bulk_form=bulk_form) # <-- ПЕРЕДАЕМ НОВУЮ ФОРМУ
     
     # return render_template('route_list.html', routes=routes, csrf_token=csrf_token)
 
@@ -286,7 +283,6 @@ def create_or_edit_route_info(route_id):
             return redirect(url_for('edit_route_stops', route_id=route.id))
         
     # --- GET-запрос (или валидация не пройдена) ---
-
     # Устанавливаем заголовок страницы
     title = 'Создание маршрута: Шаг 1' if route is None else f'Редактирование маршрута: {route.route_name}'
     
@@ -319,10 +315,6 @@ def edit_route_stops(route_id):
                 except (TypeError, ValueError):
                     km_val = 0.0
                 form.stops.append_entry({'stop_name': stop_data['name'], 'km_distance': km_val})
-
-    # print(f"DEBUG: CSRF в форме: {form.csrf_token.data}")
-    # print(f"DEBUG: CSRF в запросе: {request.form.get('csrf_token')}")
-    # print(f"DEBUG: Ошибки формы до валидации: {form.errors}")
 
     # 1. ОБРАБОТКА POST-ЗАПРОСА
     if form.validate_on_submit():
@@ -368,31 +360,6 @@ def edit_route_stops(route_id):
                 flash(f"Проверьте правильность заполнения полей остановок.", 'danger')
 
     return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
-
-        # Если ни одна из кнопок не была нажата (что маловероятно при form.validate_on_submit),
-        # или если были другие submit-кнопки.
-        # Fallthrough to render_template below for validation errors.
-
-    # # 3. ОБРАБОТКА GET-ЗАПРОСА (инициализация данных)
-    # if request.method == 'GET' and route.stops:
-    #     # Очищаем FieldList перед заполнением, чтобы избежать дублирования
-    #     form.stops.entries = [] 
-    #     for stop_data in route.stops:
-    #         # Преобразуем строку 'km' из БД обратно в float для формы
-    #         try:
-    #             km_for_form = float(stop_data['km'])
-    #         except (TypeError, ValueError):
-    #             # Если по какой-то причине значение некорректно, ставим 0.0
-    #             km_for_form = 0.0
-
-    #         # При инициализации формы km_distance лучше передавать как str или float, 
-    #         # если он был сохранен как float, но DecimalField справится с float.
-    #         form.stops.append_entry(
-    #             {'stop_name': stop_data['name'], 'km_distance': km_for_form}
-    #         )
-            
-    # 3. РЕНДЕРИНГ ШАБЛОНА
-    # return render_template('route_stops_form.html', form=form, route=route, title='Редактирование остановок: Шаг 2')
 
 
 # --- Форма с ценами за каждый отрезок пути (Этап 3) ---
@@ -527,152 +494,3 @@ def delete_route(route_id):
         flash('Произошла ошибка при удалении маршрута.', 'danger')
 
     return redirect(url_for('route_list'))
-
-
-# --- Генерация файла конфигурации для одного маршрута ---
-@app.route('/route/<int:route_id>/generate_config')
-@login_required
-def generate_config(route_id):
-    # 1. Загружаем маршрут
-    route = db.session.scalar(
-        sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id)
-    )
-    if not route:
-        flash('Маршрут не найден.', 'danger')
-        return redirect(url_for('route_list'))
-
-    # Проверка завершённости маршрута
-    if not route.is_completed:
-        flash('Маршрут не готов к экспорту. Пожалуйста, заполните все шаги (Остановки и Цены) перед генерацией файла.', 'danger')
-        # Перенаправляем на страницу редактирования остановок, чтобы пользователь видел, что нужно завершить работу
-        return redirect(url_for('edit_route_stops', route_id=route.id))
-
-    # Создаем буфер в памяти для записи байтов
-    buffer = io.BytesIO()
-
-    try:
-        current_date = datetime.now().strftime("%y%m%d")
-        # ==========================================
-        # 1. ЗАГОЛОВОК ФАЙЛА
-        # RR;TTTT;DDDD;YYMMDD;V
-        # ==========================================
-        # RR - Код региона (2 знака)
-        # TTTT - Код оператора (4 знака)
-        # DDDD - Код подразделения (4 знака)
-        # YYMMDD - Текущая дата
-        # V - Кол-во знаков после запятой (decimal_places)
-        
-        # Форматируем с ведущими нулями (zfill)
-        rr = str(route.region_code).zfill(2)
-        tttt = str(route.carrier_id).zfill(4)
-        dddd = str(route.unit_id).zfill(4)
-        v = str(route.decimal_places)
-
-        # Пишем шапку вручную (или создайте write_line внутри)
-        buffer.write(f"{rr};{tttt};{dddd};{current_date};{v}\r\n".encode('cp866'))
-
-        # Тело (используем общую функцию)
-        write_route_body_to_buffer(buffer, route, v)
-
-        # Подготовка к отправке
-        buffer.seek(0)
-        
-        # Формируем имя файла (TRFZ_номер_дата.txt)
-        filename = f"TRFZ_{route.route_number}_{current_date}.txt"
-        
-        return send_file(buffer, as_attachment=True, 
-                         download_name=filename, 
-                         mimetype='text/plain')
-
-    except Exception as e:
-        flash(f'Ошибка: {e}', 'danger')
-        return redirect(url_for('route_list'))
-
-
-# --- Генерация файла конфигурации для нескольких маршрутов ---
-@app.route('/routes/generate_bulk_config', methods=['POST'])
-@login_required
-def generate_bulk_config():
-    # 1. Получаем список ID выбранных маршрутов из формы
-    # В HTML чекбоксы будут иметь name="route_ids"
-    route_ids = request.form.getlist('route_ids')
-
-    # 2. Инициализируем и валидируем форму шапки
-    # Если форма не пройдет валидацию, мы не сможем получить ее данные (data)
-    bulk_form = BulkGenerateForm(request.form)
-
-    if not bulk_form.validate():
-        # Если валидация не удалась, мы не можем сгенерировать файл.
-        # Сохраняем сообщение об ошибке (например, для первой ошибки)
-        first_error = next(iter(bulk_form.errors.values()))[0]
-        flash(f'Ошибка в параметрах шапки: {first_error}', 'danger')
-        
-        # Перенаправляем обратно на список маршрутов (GET)
-        return redirect(url_for('route_list'))
-    
-    if not route_ids:
-        flash('Не выбрано ни одного маршрута.', 'warning')
-        return redirect(url_for('route_list'))
-
-    # 3. Загружаем маршруты из БД (проверяя, что они принадлежат user_id)
-    # Используем .in_(route_ids) для фильтрации
-    query = sa.select(Route).where(
-        Route.id.in_(route_ids), 
-        Route.user_id == current_user.id
-    )
-    routes = db.session.scalars(query).all()
-    
-    if not routes:
-        flash('Маршруты не найдены.', 'danger')
-        return redirect(url_for('route_list'))
-
-    # 4. Валидация: Проверяем флаг is_completed
-    incomplete_routes = [r.route_name for r in routes if not r.is_completed]
-    
-    if incomplete_routes:
-        flash(f'Ошибка! Следующие маршруты не заполнены до конца: {", ".join(incomplete_routes)}. Заполните их перед генерацией.', 'danger')
-        return redirect(url_for('route_list'))
-    
-    # Получаем значение точности цен из формы для использования в шапке и теле
-    decimal_places_value = bulk_form.decimal_places.data # Значение V (0, 1 или 2)
-
-    # 5. Генерация файла
-    buffer = io.BytesIO()
-    
-    # Вспомогательная функция для записи одной строки (для шапки)
-    def write_line(text):
-        buffer.write((text + '\r\n').encode('cp866', errors='replace'))
-
-    try:
-        # --- ШАПКА ФАЙЛА (Берем данные из bulk_form.data) ---
-        current_date = datetime.now().strftime("%y%m%d")
-        
-        # ИСПОЛЬЗУЕМ ДАННЫЕ ИЗ ФОРМЫ (ОНИ УЖЕ ОТФИЛЬТРОВАНЫ и ВАЛИДИРОВАНЫ)
-        rr = bulk_form.region_code.data
-        tttt = bulk_form.carrier_id.data
-        dddd = bulk_form.unit_id.data
-        v = decimal_places_value
-
-        header_line = f"{rr};{tttt};{dddd};{current_date};{v}"
-        write_line(header_line)
-
-        # --- ТЕЛА МАРШРУТОВ ---
-        for route in routes:
-            # Используем нашу функцию рефакторинга
-            write_route_body_to_buffer(buffer, route, decimal_places_value)
-
-        # --- ОТПРАВКА ---
-        buffer.seek(0)
-        filename = f"TRFZ_BULK_{current_date}_({len(routes)}routes).txt"
-        
-        return send_file(
-            buffer,
-            as_attachment=True,
-            download_name=filename,
-            mimetype='text/plain'
-        )
-
-    except Exception as e:
-        print(f"Error generating bulk config: {e}")
-        flash(f'Ошибка при генерации файла: {e}', 'danger')
-        return redirect(url_for('route_list'))
