@@ -1,6 +1,6 @@
 from app import app, db
 from app.models import User, Route
-from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm, EditProfileForm #, BulkGenerateForm
+from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm, EditProfileForm
 from flask import render_template, flash, redirect, url_for, request, abort, current_app, send_file
 from flask_login import current_user, login_user, logout_user, login_required
 import sqlalchemy as sa
@@ -120,34 +120,11 @@ def edit_profile():
 @app.route('/routes')
 @login_required
 def route_list():
-    # routes = Route.query.filter_by(user_id=current_user.id).all()
-    # return render_template('route_list.html', routes=routes)
     routes = Route.query.filter_by(user_id=current_user.id).all()
     
     # Явно передаем CSRF-токен в шаблон
     # Используем функцию generate_csrf(), чтобы получить строковое значение токена.
     csrf_token = generate_csrf()
-
-    # Инициализируем форму для массовой генерации
-    # bulk_form = BulkGenerateForm() 
-
-    # 1. ПРИОРИТЕТ: Загружаем значения из ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ
-    # Значения уже отфильтрованы и заполнены нулями благодаря дефолтам в модели
-    # if current_user.default_region_code:
-    #     bulk_form.region_code.data = current_user.default_region_code
-    # if current_user.default_carrier_id:
-    #     bulk_form.carrier_id.data = current_user.default_carrier_id
-    # if current_user.default_unit_id:
-    #     bulk_form.unit_id.data = current_user.default_unit_id
-        
-    # 2. ЗАПАСНОЙ ВАРИАНТ: Если профиль пуст (чего не должно быть при установке defaults),
-    # или если нужно инициализировать decimal_places (которого нет в профиле), берем из первого маршрута.
-    # if routes: 
-    #     last_route = routes[0] 
-        
-    #     # region_code, carrier_id, unit_id перезаписываются только если нет в профиле (не обязательно)
-    #     # Для decimal_places берем значение из первого маршрута, т.к. оно не хранится в профиле
-    #     bulk_form.decimal_places.data = last_route.decimal_places if hasattr(last_route, 'decimal_places') else '2'
 
     return render_template('route_list.html', 
                            routes=routes, 

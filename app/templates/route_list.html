@@ -13,7 +13,6 @@
             У вас пока нет сохраненных маршрутов. Начните с создания первого!
         </div>
     {% else %}
-        <!--<form method="POST" action="{{ url_for('route_list') }}" id="bulk-generate-form">-->
         <div>
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
@@ -124,8 +123,6 @@
                 </table>
             </div>
         </div>
-        <!--</form>-->
-        {# КОНЕЦ ФОРМЫ ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ #}
 
         {# Скрытая форма для удаления #}
         <form id="delete-route-form" method="POST" action="">

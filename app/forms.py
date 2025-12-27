@@ -126,17 +126,6 @@ class RouteInfoForm(FlaskForm):
     transport_type = SelectField('Тип транспорта', 
                                 choices=list(TRANSPORT_TYPE_CHOICES.items()), 
                                 validators=[DataRequired()])
-
-    # transport_type = SelectField('Тип транспорта', choices=[
-    #     ('0x01', 'Метрополитен (01)'),
-    #     ('0x02', 'Автобус (городской) (02)'), # Используется 02 в файле
-    #     ('0x20', 'Автобус (пригородный) (20)'),
-    #     ('0x40', 'Автобус (междугородний) (40)'),
-    #     ('0x04', 'Троллейбус (04)'),
-    #     ('0x08', 'Трамвай (08)'),
-    #     ('0x10', 'Маршрутное такси (10)'),
-    #     ('0x80', 'Поезд (пригородный) (80)'),
-    # ], validators=[DataRequired()])
     
     # Тарифные таблицы (FieldList)
     tariff_tables = FieldList(
@@ -279,35 +268,6 @@ class RoutePricesForm(FlaskForm):
     
     # Кнопка для отправки данных
     save_prices = SubmitField('Сохранить все цены')
-
-
-# ФОРМА ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ ФАЙЛА КОНФИГУРАЦИИ (Параметры шапки)
-# class BulkGenerateForm(FlaskForm):
-#     """Форма для ввода параметров шапки при массовой генерации файла."""
-    
-#     # Копируем поля и логику заполнения нулями из RouteInfoForm
-#     region_code = StringField('Код региона (RR)', validators=[
-#         DataRequired(), Length(min=1, max=2), Regexp(r'^\d+$', message='Код должен содержать только цифры (максимум 2).')
-#     ], filters=[
-#         lambda x: x.zfill(2) if x else x 
-#     ])
-    
-#     carrier_id = StringField('ID Перевозчика (TTTT)', validators=[
-#         DataRequired(), Length(min=1, max=4), Regexp(r'^\d+$', message='ID должен содержать только цифры (максимум 4).')
-#     ], filters=[
-#         lambda x: x.zfill(4) if x else x 
-#     ])
-    
-#     unit_id = StringField('ID Подразделения (DDDD)', validators=[
-#         DataRequired(), Length(min=1, max=4), Regexp(r'^\d+$', message='ID должен содержать только цифры (максимум 4).')
-#     ], filters=[
-#         lambda x: x.zfill(4) if x else x 
-#     ])
-    
-#     # Поле для точности цен (V)
-#     decimal_places = SelectField('Точность цен (V)', 
-#                                 choices=[('0', '0'), ('1', '1'), ('2', '2')], 
-#                                 validators=[DataRequired()])
 
 
 # 3. ФОРМА ДЛЯ РЕДАКТИРОВАНИЯ ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ (НАСТРОЙКИ ФАЙЛА КОНФИГУРАЦИИ ПО УМОЛЧАНИЮ)

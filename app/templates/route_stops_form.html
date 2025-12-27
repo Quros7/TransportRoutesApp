@@ -147,7 +147,7 @@
             container.insertAdjacentHTML('beforeend', newHtml);
             
             updateStopHeaders(); // Обновление заголовков и состояния полей
-            initDistanceFormatters(); // ✅ Добавляем обработчики к новой остановке
+            initDistanceFormatters(); // Добавляем обработчики к новой остановке
         }
 
         /**
@@ -168,16 +168,6 @@
 
             if (entry) {
                 entry.remove();
-                
-                // Пересчет индексов для Flask-WTF
-                //container.querySelectorAll('.stop-entry').forEach((entry, idx) => {
-                //    entry.querySelectorAll('input').forEach(input => {
-                //        if (input.name) {
-                //            // Заменяем старый индекс на новый (stops-N-field_name)
-                //            input.name = input.name.replace(/stops-\d+-/, `stops-${idx}-`);
-                //        }
-                //    });
-                //});
 
                 updateStopHeaders();
             }
@@ -317,15 +307,6 @@
 
                 const stopName = nameInput.value || `№${index}`;
 
-                // // Используем parseFloat для DOM-значения. Заменяем запятую на точку для надежности.
-                // let currentKm = parseFloat(kmInput.value.replace(',', '.')) || 0; 
-                //
-                // if (isNaN(currentKm) || currentKm < 0) {
-                //     alert(`Ошибка: Расстояние до остановки "${stopName}" должно быть неотрицательным числом.`);
-                //     kmInput.focus();
-                //     return false;
-                // }
-
                 // 1. Очистка и округление (для числовой проверки)
                 let inputValue = kmInput.value.replace(',', '.');
                 let currentKm = parseFloat(inputValue); 
@@ -371,11 +352,8 @@
         }
 
 
-    // 💥 ОБРАБОТЧИК ОТПРАВКИ ФОРМЫ
+    // ОБРАБОТЧИК ОТПРАВКИ ФОРМЫ
     document.addEventListener('DOMContentLoaded', () => {
-        // !!! ВАЖНО: ЗАМЕНИТЕ 'form' НА СЕЛЕКТОР ИЛИ ID ВАШЕЙ ФОРМЫ !!!
-        // Если ваша форма не имеет ID, можете использовать document.querySelector('form')
-        // Если у нее есть ID, например, id="route-stops-form", используйте:
         const form = document.querySelector('form'); // Или document.getElementById('route-stops-form'); 
         
         if (form) {
