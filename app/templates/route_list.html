@@ -3,9 +3,14 @@
 {% block content %}
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Мои маршруты</h2>
-        <a href="{{ url_for('create_or_edit_route_info') }}" class="btn btn-success">
-            <i class="fas fa-plus"></i> Создать новый маршрут
-        </a>
+        <div>
+            <a href="{{ url_for('create_or_edit_route_info') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Создать новый маршрут
+            </a>
+            <a href="{{ url_for('import_route') }}" class="btn btn-outline-secondary ms-2">
+                <i class="fas fa-file-import"></i> Импортировать маршрут
+            </a>
+        </div>
     </div>
 
     {% if not routes %}
@@ -97,7 +102,7 @@
                                     {{ route.stops | length if route.stops else 0 }}
                                 </td>
                                 <td class="text-center">
-                                    {{ route.tariffs | length if route.tariffs else 0 }}
+                                    {{ route.tariff_tables | length if route.tariff_tables else 0 }}
                                 </td>
                                 <td>
                                     {% if route.is_completed %}

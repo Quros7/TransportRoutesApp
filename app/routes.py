@@ -1,6 +1,6 @@
 from app import app, db
 from app.models import User, Route
-from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm, BulkGenerateForm, EditProfileForm
+from app.forms import LoginForm, RegistrationForm, RouteInfoForm, RouteStopsForm, RoutePricesForm, BulkGenerateForm, EditProfileForm, ImportRouteForm
 from flask import render_template, flash, redirect, url_for, request, abort, current_app, send_file
 from flask_login import current_user, login_user, logout_user, login_required
 import sqlalchemy as sa
@@ -676,3 +676,122 @@ def generate_bulk_config():
         print(f"Error generating bulk config: {e}")
         flash(f'Ошибка при генерации файла: {e}', 'danger')
         return redirect(url_for('route_list'))
+
+
+# Импорт маршрута
+@app.route('/route/import', methods=['GET', 'POST'])
+@login_required
+def import_route():
+    form = ImportRouteForm()
+    if form.validate_on_submit():
+        file = form.route_file.data
+        try:
+            raw_data = file.read()
+            
+            # --- ОПРЕДЕЛЕНИЕ КОДИРОВКИ ---
+            # Пробуем декодировать как UTF-8, если не выйдет — берем CP866
+            try:
+                content = raw_data.decode('utf-8')
+            except UnicodeDecodeError:
+                content = raw_data.decode('cp866', errors='replace')
+
+            lines = [line.strip() for line in content.splitlines() if line.strip()]
+            
+            if len(lines) < 2:
+                flash('Файл пуст или имеет неверный формат', 'danger')
+                return redirect(request.url)
+
+            # --- 1. ПАРСИНГ ШАПКИ ---
+            header = lines[0].split(';')
+            dec_places = int(header[4])
+            multiplier = 10 ** dec_places
+
+            # --- 2. ПАРСИНГ R-СТРОКИ ---
+            r_line = lines[1].split(';')
+            r_number = r_line[1]
+            # Убираем возможные артефакты кодировки из названия
+            r_name = r_line[4].strip() 
+            zones_count = int(r_line[3])
+            tabs_count = int(r_line[5])
+
+            # --- 3. ИНИЦИАЛИЗАЦИЯ МАРШРУТА ---
+            new_route = Route(
+                user_id=current_user.id,
+                route_name=r_name,
+                route_number=r_number,
+                region_code=header[0],
+                carrier_id=header[1],
+                unit_id=header[2],
+                transport_type=f"0x{r_line[2]}" if not r_line[2].startswith('0x') else r_line[2],
+                decimal_places=dec_places,
+                stops=[],
+                tariff_tables=[],
+                price_matrix=[],
+                stops_set=True,
+                is_completed=True
+            )
+
+            # --- 4. ОСТАНОВКИ ---
+            stop_lines = lines[2 : 2 + zones_count]
+            for sl in stop_lines:
+                parts = sl.split(';')
+                new_route.stops.append({'name': parts[2], 'km': parts[1]})
+
+            # --- 5. ТАРИФНЫЕ ТАБЛИЦЫ ---
+            tabs_start = 2 + zones_count
+            tab_lines = lines[tabs_start : tabs_start + tabs_count]
+            tab_ids = []
+            
+            new_route.tariff_tables = [] 
+            
+            for index, tl in enumerate(tab_lines, start=1):
+                parts = tl.split(';')
+                tab_no = int(parts[0])
+                raw_ss_string = parts[2]
+                
+                # Парсим список кодов для поля parsed_ss_codes_list
+                ss_list = [c.strip() for c in raw_ss_string.split(';') if c.strip()]
+                
+                # Формируем словарь строго по структуре "Шага 1"
+                new_route.tariff_tables.append({
+                    "tab_number": tab_no,
+                    "tariff_name": f"Тариф {index}",
+                    "table_type_code": parts[1],
+                    "ss_series_codes": raw_ss_string,
+                    "parsed_ss_codes_list": ss_list
+                })
+                tab_ids.append(str(tab_no))
+
+            # --- 6. МАТРИЦА ЦЕН ---
+            matrix = [[{} for _ in range(zones_count)] for _ in range(zones_count)]
+            price_lines = lines[tabs_start + tabs_count :]
+            
+            for ml in price_lines:
+                parts = ml.split(';')
+                if len(parts) < 3: continue
+                
+                i, j = int(parts[0]), int(parts[1])
+                prices = parts[2:] 
+                
+                cell_data = {}
+                for idx, p_val in enumerate(prices):
+                    if idx < len(tab_ids):
+                        t_id = tab_ids[idx]
+                        cell_data[t_id] = float(p_val) / multiplier
+                
+                matrix[i][j] = cell_data
+                matrix[j][i] = cell_data
+
+            new_route.price_matrix = matrix
+
+            db.session.add(new_route)
+            db.session.commit()
+            flash(f'Маршрут "{r_name}" успешно импортирован!', 'success')
+            return redirect(url_for('route_list'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Ошибка импорта: {str(e)}', 'danger')
+            return redirect(request.url)
+
+    return render_template('import_route.html', form=form)

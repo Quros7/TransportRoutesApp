@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, FieldList, FormField, DecimalField, SelectField, HiddenField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Regexp, InputRequired, NumberRange
+from flask_wtf.file import FileField, FileRequired, FileAllowed
 from decimal import Decimal, InvalidOperation
 import sqlalchemy as sa
 from app import db
@@ -336,3 +337,12 @@ class EditProfileForm(FlaskForm):
     ])
     
     submit = SubmitField('Сохранить настройки')
+
+
+# Форма импорта маршрута из файла конфигурации
+class ImportRouteForm(FlaskForm):
+    route_file = FileField('Выберите файл конфигурации', validators=[
+        FileRequired(),
+        FileAllowed(['txt'], 'Только текстовые файлы конфигурации!')
+    ])
+    submit = SubmitField('Загрузить и импортировать')
