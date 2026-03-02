@@ -3,6 +3,9 @@ venv/
 env/
 __pycache__/
 
+.venv/
+.ruff_cache/
+
 # Кэш Python
 *.pyc
 *.pyo
@@ -31,3 +34,4 @@ Thumbs.db
 # Миграции (если не хотите коммитить их)
 migrations/versions/*
 !migrations/versions/.keep
+.coverage
