@@ -1,5 +1,5 @@
 from app import db
-from app.models import User
+from app.models import AuditLog, User
 
 
 class TestUserModel:
@@ -25,6 +25,7 @@ class TestUserModel:
             assert user.default_region_code == "00"
             assert user.default_carrier_id == "0000"
             assert user.default_unit_id == "0000"
+            assert user.is_admin is False
             db.session.rollback()  # Don't commit
 
     def test_route_repr(self):
@@ -32,3 +33,7 @@ class TestUserModel:
 
         route = Route(route_name="Test Route")
         assert repr(route) == "<Route Test Route>"
+
+    def test_audit_log_repr(self):
+        log = AuditLog(action="route_created", entity_type="route", user_id=1, route_id=2)
+        assert "route_created" in repr(log)

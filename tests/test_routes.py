@@ -1,5 +1,5 @@
 from app import db
-from app.models import Route
+from app.models import AuditLog, Route
 
 
 def test_index_redirects_to_login_when_not_logged_in(client):
@@ -92,6 +92,16 @@ def test_route_list(logged_in_client):
     response = logged_in_client.get("/routes")
     assert response.status_code == 200
     assert "routes" in response.get_data(as_text=True) or "Маршруты" in response.get_data(as_text=True)  # Assuming template has this
+
+
+def test_admin_panel_forbidden_for_non_admin(logged_in_client):
+    response = logged_in_client.get("/admin/", follow_redirects=False)
+    assert response.status_code == 403
+
+
+def test_admin_panel_accessible_for_admin(admin_client):
+    response = admin_client.get("/admin/", follow_redirects=False)
+    assert response.status_code == 200
 
 
 def test_create_route_info_get(logged_in_client):
@@ -193,6 +203,34 @@ def test_delete_route(logged_in_client):
     response = logged_in_client.post(f"/route/delete/{route_id}", follow_redirects=True)
     assert response.status_code == 200
     assert "успешно удален" in response.get_data(as_text=True)
+
+
+def test_route_delete_writes_audit_log(logged_in_client):
+    with logged_in_client.application.app_context():
+        route = Route(
+            user_id=1,
+            route_name="Audit Route",
+            transport_type="bus",
+            carrier_id="1234",
+            unit_id="5678",
+            route_number="001",
+            region_code="01",
+            decimal_places=2,
+            stops=[],
+            price_matrix=[],
+            tariff_tables=[],
+            is_completed=True,
+        )
+        db.session.add(route)
+        db.session.commit()
+        route_id = route.id
+
+    response = logged_in_client.post(f"/route/delete/{route_id}", follow_redirects=False)
+    assert response.status_code == 302
+
+    with logged_in_client.application.app_context():
+        log = db.session.query(AuditLog).filter_by(action="route_deleted", route_id=route_id).order_by(AuditLog.id.desc()).first()
+        assert log is not None
 
 
 def test_generate_config_incomplete_route(logged_in_client):

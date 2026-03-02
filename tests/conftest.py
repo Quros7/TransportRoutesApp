@@ -54,3 +54,18 @@ def logged_in_client(client):
         follow_redirects=False,
     )
     return client
+
+
+@pytest.fixture
+def admin_client(client):
+    with client.application.app_context():
+        user = User(username="adminuser", email="admin@example.com", is_admin=True)
+        user.set_password("password")
+        db.session.add(user)
+        db.session.commit()
+    client.post(
+        "/login",
+        data={"username": "adminuser", "password": "password", "remember_me": False},
+        follow_redirects=False,
+    )
+    return client

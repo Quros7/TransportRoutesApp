@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from flask_login import UserMixin
@@ -12,6 +14,7 @@ class User(UserMixin, db.Model):
     username: so.Mapped[str] = so.mapped_column(sa.String(64), index=True, unique=True)
     email: so.Mapped[str] = so.mapped_column(sa.String(120), index=True, unique=True)
     password_hash: so.Mapped[str | None] = so.mapped_column(sa.String(256))
+    is_admin: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False, nullable=False)
 
     # Поля для настроек файла конфигурации по умолчанию
     default_region_code = db.Column(db.String(2), default="00")
@@ -35,7 +38,7 @@ def load_user(usr_id):
 
 class Route(db.Model):
     id: so.Mapped[int] = so.mapped_column(primary_key=True)
-    user_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey(User.id))
+    user_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey(User.id), index=True)
 
     # СТАРЫЕ ПОЛЯ
     route_name: so.Mapped[str] = so.mapped_column(sa.String(128))
@@ -59,3 +62,23 @@ class Route(db.Model):
 
     def __repr__(self):
         return f"<Route {self.route_name}>"
+
+
+class AuditLog(db.Model):
+    id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    user_id: so.Mapped[int | None] = so.mapped_column(sa.ForeignKey(User.id), nullable=True, index=True)
+    route_id: so.Mapped[int | None] = so.mapped_column(sa.ForeignKey(Route.id), nullable=True, index=True)
+    action: so.Mapped[str] = so.mapped_column(sa.String(64), nullable=False, index=True)
+    entity_type: so.Mapped[str] = so.mapped_column(sa.String(64), nullable=False, index=True)
+    details = db.Column(db.JSON, default=dict)
+    endpoint: so.Mapped[str | None] = so.mapped_column(sa.String(128), nullable=True)
+    method: so.Mapped[str | None] = so.mapped_column(sa.String(16), nullable=True)
+    ip_address: so.Mapped[str | None] = so.mapped_column(sa.String(64), nullable=True)
+    user_agent: so.Mapped[str | None] = so.mapped_column(sa.String(512), nullable=True)
+    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False, index=True)
+
+    user: so.Mapped[User | None] = so.relationship(User, lazy="joined")
+    route: so.Mapped[Route | None] = so.relationship(Route, lazy="joined")
+
+    def __repr__(self):
+        return f"<AuditLog {self.action} user={self.user_id} route={self.route_id}>"

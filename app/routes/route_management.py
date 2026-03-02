@@ -1,6 +1,7 @@
 # ruff: disable[ERA001]
 import io
 import json
+from copy import deepcopy
 from datetime import datetime
 from urllib.parse import parse_qs
 
@@ -10,6 +11,7 @@ from flask_login import current_user, login_required
 from flask_wtf.csrf import generate_csrf
 
 from app import db
+from app.audit import log_action, serialize_route
 from app.forms import BulkGenerateForm, ImportRouteForm, RouteInfoForm, RoutePricesForm, RouteStopsForm
 from app.models import Route
 from app.utils import write_route_body_to_buffer
@@ -142,6 +144,13 @@ def create_or_edit_route_info(route_id):
             # --- Создание нового объекта Route ---
             new_route = Route(user_id=current_user.id, stops=[], price_matrix=[], **data_to_save)
             db.session.add(new_route)
+            db.session.flush()
+            log_action(
+                action="route_created",
+                entity_type="route",
+                route_id=new_route.id,
+                details={"after": serialize_route(new_route)},
+            )
             db.session.commit()
 
             flash(
@@ -155,6 +164,7 @@ def create_or_edit_route_info(route_id):
             # --- Обновление существующего объекта Route ---
 
             # 1. Запоминаем критические состояния ДО обновления
+            before_snapshot = serialize_route(route)
             old_transport_type = route.transport_type
             old_tariffs = route.tariff_tables  # Это список словарей JSON
 
@@ -172,6 +182,12 @@ def create_or_edit_route_info(route_id):
                     "info",
                 )
 
+            log_action(
+                action="route_info_updated",
+                entity_type="route",
+                route_id=route.id,
+                details={"before": before_snapshot, "after": serialize_route(route)},
+            )
             db.session.commit()
             flash("Изменения сохранены.", "success")
             # Переход к Шагу 2
@@ -232,12 +248,25 @@ def edit_route_stops(route_id):
             new_stop_data.append({"name": name, "km": f"{km:.2f}"})
 
         # ЛОГИКА УМНОГО СБРОСА
+        before_stops = deepcopy(route.stops)
+        before_is_completed = route.is_completed
         if route.stops != new_stop_data:
             route.is_completed = False
             flash("Состав остановок изменился. Пожалуйста, проверьте цены.", "warning")
 
         route.stops = new_stop_data
         route.stops_set = True
+        log_action(
+            action="route_stops_updated",
+            entity_type="route",
+            route_id=route.id,
+            details={
+                "before_stops": before_stops,
+                "after_stops": new_stop_data,
+                "before_is_completed": before_is_completed,
+                "after_is_completed": route.is_completed,
+            },
+        )
         db.session.commit()
 
         flash("Остановки сохранены.", "success")
@@ -383,9 +412,16 @@ def edit_route_prices(route_id):
             new_matrix = json.loads(cleaned_string)
 
             if isinstance(new_matrix, list):
+                before_matrix = deepcopy(route.price_matrix)
                 route.price_matrix = new_matrix
                 route.is_completed = True
 
+                log_action(
+                    action="route_prices_updated",
+                    entity_type="route",
+                    route_id=route.id,
+                    details={"before_price_matrix": before_matrix, "after_price_matrix": new_matrix},
+                )
                 db.session.commit()
                 flash("Цены успешно сохранены!", "success")
                 return redirect(url_for("route_management.route_list"))
@@ -427,12 +463,26 @@ def delete_route(route_id):
 
     # 2. Проверка прав: Убедимся, что пользователь удаляет только свои маршруты
     if route.user_id != current_user.id:
+        log_action(
+            action="route_delete_forbidden",
+            entity_type="route",
+            route_id=route.id,
+            details={"owner_id": route.user_id},
+        )
+        db.session.commit()
         flash("У вас нет прав для удаления этого маршрута.", "danger")
         return redirect(url_for("route_management.route_list"))
 
     # 3. Удаление из базы данных
     try:
+        before_snapshot = serialize_route(route)
         db.session.delete(route)
+        log_action(
+            action="route_deleted",
+            entity_type="route",
+            route_id=before_snapshot["id"],
+            details={"before": before_snapshot},
+        )
         db.session.commit()
         flash(f'Маршрут "{route.route_name}" успешно удален.', "success")
     except Exception as e:
@@ -494,6 +544,13 @@ def generate_config(route_id):
 
         # Формируем имя файла (TRFZ_номер_дата.txt)
         filename = f"TRFZ_{route.route_number}_{current_date}.txt"
+        log_action(
+            action="route_config_generated",
+            entity_type="route",
+            route_id=route.id,
+            details={"filename": filename},
+        )
+        db.session.commit()
 
         return send_file(buffer, as_attachment=True, download_name=filename, mimetype="text/plain")
 
@@ -577,6 +634,12 @@ def generate_bulk_config():
         # --- ОТПРАВКА ---
         buffer.seek(0)
         filename = f"TRFZ_BULK_{current_date}_({len(routes)}routes).txt"
+        log_action(
+            action="routes_bulk_config_generated",
+            entity_type="route",
+            details={"filename": filename, "route_ids": [route.id for route in routes]},
+        )
+        db.session.commit()
 
         return send_file(buffer, as_attachment=True, download_name=filename, mimetype="text/plain")
 
@@ -696,6 +759,13 @@ def import_route():
             new_route.price_matrix = matrix
 
             db.session.add(new_route)
+            db.session.flush()
+            log_action(
+                action="route_imported",
+                entity_type="route",
+                route_id=new_route.id,
+                details={"after": serialize_route(new_route)},
+            )
             db.session.commit()
             flash(f'Маршрут "{r_name}" успешно импортирован!', "success")
             return redirect(url_for("route_management.route_list"))

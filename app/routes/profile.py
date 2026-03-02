@@ -2,6 +2,7 @@ from flask import Blueprint, flash, redirect, render_template, url_for
 from flask_login import current_user, login_required
 
 from app import db
+from app.audit import log_action
 from app.forms import EditProfileForm
 
 bp = Blueprint("profile", __name__)
@@ -29,6 +30,15 @@ def user(username):
         current_user.default_carrier_id = form.default_carrier_id.data
         current_user.default_unit_id = form.default_unit_id.data
 
+        log_action(
+            action="profile_updated",
+            entity_type="user",
+            details={
+                "default_region_code": current_user.default_region_code,
+                "default_carrier_id": current_user.default_carrier_id,
+                "default_unit_id": current_user.default_unit_id,
+            },
+        )
         db.session.commit()
         flash("Настройки профиля для массовой генерации успешно сохранены.", "success")
         return redirect(url_for("profile.user", username=current_user.username))
@@ -54,6 +64,15 @@ def edit_profile():
         current_user.default_carrier_id = form.default_carrier_id.data
         current_user.default_unit_id = form.default_unit_id.data
 
+        log_action(
+            action="profile_updated",
+            entity_type="user",
+            details={
+                "default_region_code": current_user.default_region_code,
+                "default_carrier_id": current_user.default_carrier_id,
+                "default_unit_id": current_user.default_unit_id,
+            },
+        )
         db.session.commit()
         flash("Настройки профиля для массовой генерации успешно сохранены.", "success")
         return redirect(url_for("profile.edit_profile"))  # Перенаправляем обратно на ту же страницу
