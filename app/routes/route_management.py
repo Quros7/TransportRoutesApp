@@ -232,7 +232,7 @@ def edit_route_stops(route_id):
 
     # 1. ОБРАБОТКА POST-ЗАПРОСА
     if form.validate_on_submit():
-        print("защли")
+        # print("DEBUG: Зашли в ОБРАБОТКА POST-ЗАПРОСА")
         # Проверяем, что нажата кнопка "Далее"
         # if form.next_step.data:
         new_stop_data = []
@@ -274,7 +274,7 @@ def edit_route_stops(route_id):
 
     # 2. ЕСЛИ ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)
     elif request.method == "POST":
-        print("УДША")
+        print("DEBUG: ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)")
         # Собираем ошибки из всех уровней формы
         for field, errors in form.errors.items():
             if isinstance(errors, list):

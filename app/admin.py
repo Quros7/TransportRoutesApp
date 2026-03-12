@@ -4,9 +4,12 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from flask import abort, redirect, request, url_for
 from flask_admin import Admin, AdminIndexView, expose
+from flask_admin.menu import MenuLink
 from flask_admin.contrib.sqla import ModelView
 from flask_login import current_user
 from markupsafe import Markup, escape
+from wtforms import PasswordField, StringField
+from wtforms.validators import DataRequired, Optional
 
 from app import db
 from app.models import AuditLog, Route, User
@@ -72,6 +75,38 @@ class UserAdminView(SecureModelView):
     category = "Справочники"
     column_exclude_list = ["password_hash"]
     form_excluded_columns = ["password_hash"]
+    form_extra_fields = {
+        'password': StringField(
+            'Пароль', 
+            validators=[Optional()] # По умолчанию ставим Optional
+        )
+    }
+    form_columns = ["username", "email", "is_admin", "password", "default_region_code", "default_carrier_id", "default_unit_id"]
+    
+    
+    def on_model_change(self, form, model, is_created):
+        if is_created and not form.password.data:
+            # Если это создание НОВОГО пользователя и пароль пустой — прерываем
+            from flask import flash
+            flash('Ошибка: При создании нового пользователя пароль обязателен!', 'error')
+            raise Exception('Password is required for new users')
+            
+        if form.password.data:
+            # Если пароль введен (при создании или при редактировании) — хешируем
+            model.set_password(form.password.data)
+    
+    # Чтобы в интерфейсе админки появилась звездочка "обязательно" только при создании
+    def edit_form(self, obj=None):
+        form = super().edit_form(obj)
+        form.password.validators = [Optional()]
+        return form
+
+    def create_form(self):
+        form = super().create_form()
+        form.password.validators = [DataRequired(message="Пароль обязателен для нового пользователя!")]
+        return form
+
+
     can_view_details = True
     column_list = ["id", "username", "email", "is_admin", "default_region_code", "default_carrier_id", "default_unit_id"]
     column_labels = {
@@ -79,12 +114,13 @@ class UserAdminView(SecureModelView):
         "username": "Логин",
         "email": "Email",
         "is_admin": "Администратор",
-        "default_region_code": "Регион по умолчанию",
-        "default_carrier_id": "Оператор по умолчанию",
-        "default_unit_id": "Подразделение по умолчанию",
+        "password": "Пароль",
+        "default_region_code": "Код региона (по умолчанию)",
+        "default_carrier_id": "ID перевозчика (по умолчанию)",
+        "default_unit_id": "ID подразделения (по умолчанию)",
     }
     column_sortable_list = ["id", "username", "email", "is_admin"]
-    column_searchable_list = ["username", "email"]
+    column_searchable_list = ["id", "username", "email"]
     column_filters = ["is_admin", "default_region_code"]
 
 
@@ -145,7 +181,8 @@ class AuditLogAdminView(SecureModelView):
         "created_at": "Время (UTC)",
         "action": "Действие",
         "entity_type": "Сущность",
-        "user_id": "Пользователь",
+        "user_id": "Пользователь (ID)",
+        "user.username": "Логин",
         "route_id": "Маршрут",
         "endpoint": "Endpoint",
         "method": "Метод",
@@ -153,7 +190,7 @@ class AuditLogAdminView(SecureModelView):
         "details": "Детали",
     }
     column_sortable_list = ["created_at", "action", "entity_type", "user_id", "route_id", "method"]
-    column_searchable_list = ["action", "entity_type", "endpoint", "method"]
+    column_searchable_list = ["action", "entity_type", "user.username", "user_id", "endpoint", "method"]
     column_filters = ["action", "entity_type", "user_id", "route_id", "method", "created_at"]
 
     @staticmethod
@@ -216,9 +253,16 @@ class AuditLogAdminView(SecureModelView):
 
 def init_admin(app):
     if "admin" in app.extensions:
-        return
+        return  
 
-    admin = Admin(app, name="Transport Admin", url="/admin", index_view=SecureAdminIndexView(url="/admin"))
+    admin = Admin(
+        app, 
+        name="Transport Admin", 
+        url="/admin", 
+        index_view=SecureAdminIndexView(url="/admin")
+    )
+    admin.add_link(MenuLink(name='Вернуться на главную', url='/'))
+
     admin.add_view(UserAdminView(User, db.session))
     admin.add_view(RouteAdminView(Route, db.session))
     admin.add_view(AuditLogAdminView(AuditLog, db.session))
