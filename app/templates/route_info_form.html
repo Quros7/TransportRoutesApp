@@ -68,7 +68,7 @@
                     <div class="card-body">
                         <h5 class="card-title">Таблица {{ loop.index }}</h5> 
                         
-                        {# 💥 ИЗМЕНЕНИЕ: ОБНОВЛЕННЫЕ ПОЛЯ В СООТВЕТСТВИИ С TariffTableEntryForm #}
+                        {# ИЗМЕНЕНИЕ: ОБНОВЛЕННЫЕ ПОЛЯ В СООТВЕТСТВИИ С TariffTableEntryForm #}
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 {{ entry_form.form.tariff_name.label(class="form-label") }}
@@ -105,7 +105,7 @@
 
         {# Кнопки Назад и Сохранить #}
         <div class="mt-4 d-flex justify-content-between">
-            <a href="{{ url_for('route_list') }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('route_management.route_list') }}" class="btn btn-outline-secondary">
                 <i class="bi bi-chevron-left"></i> Назад к списку маршрутов
             </a>
             
@@ -121,7 +121,7 @@
     // Это значение берется из основного form.hidden_tag(), который находится в начале формы.
     const csrf_token_value = document.querySelector('input[name="csrf_token"]').value;
 
-    // 💥 ШАБЛОН ДЛЯ НОВОЙ ТАРИФНОЙ ТАБЛИЦЫ
+    // ШАБЛОН ДЛЯ НОВОЙ ТАРИФНОЙ ТАБЛИЦЫ
     const tariffTableTemplate = `
         <div class="card mb-3 tariff-table-entry">
             <div class="card-body">
@@ -158,7 +158,7 @@
         const container = document.getElementById('tariff-tables-container');
         const count = container.querySelectorAll('.tariff-table-entry').length;
         
-        // 💥 Проверка лимита в 15 таблиц
+        // Проверка лимита в 15 таблиц
         if (count >= 15) {
             alert("Достигнут максимальный лимит: 15 тарифных таблиц.");
             return;
@@ -243,7 +243,7 @@
 
     // Инициализация при загрузке страницы
     window.onload = function() {
-        // 💥 Нам нужно обновить все заголовки и состояние полей при загрузке, 
+        // Нам нужно обновить все заголовки и состояние полей при загрузке, 
         // чтобы применить правила "Таблицы 1" к уже загруженным Jinja-полям.
         updateTariffTableHeaders();
     };
