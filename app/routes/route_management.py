@@ -412,6 +412,22 @@ def edit_route_prices(route_id):
             new_matrix = json.loads(cleaned_string)
 
             if isinstance(new_matrix, list):
+                # Проходим по всем строкам, ячейкам и тарифам для очистки
+                for row in new_matrix:
+                    if isinstance(row, list):
+                        for cell in row:
+                            if isinstance(cell, dict):
+                                for t_id, val in cell.items():
+                                    try:
+                                        # Если прилетела строка с запятой (напр. "100,50")
+                                        if isinstance(val, str):
+                                            val = val.replace(',', '.')
+                                        # Принудительно превращаем во float и округляем
+                                        cell[t_id] = round(float(val if val else 0), 2)
+                                    except (ValueError, TypeError):
+                                        cell[t_id] = 0.0
+                
+                # Только после очистки сохраняем в базу
                 before_matrix = deepcopy(route.price_matrix)
                 route.price_matrix = new_matrix
                 route.is_completed = True

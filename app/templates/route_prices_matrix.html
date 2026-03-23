@@ -63,7 +63,7 @@
                                                         {{ tariff_table.tariff_name }}:
                                                     </label>
                                                     <input 
-                                                        type="number" 
+                                                        type="text" 
                                                         step="0.01" 
                                                         min="0"
                                                         class="form-control form-control-sm price-input"
@@ -116,6 +116,29 @@
         const inputs = document.querySelectorAll('.price-input');
         const mainTable = document.querySelector('.price-matrix'); 
 
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('price-input')) {
+                let input = e.target;
+                
+                // 1. Запоминаем текущую позицию курсора
+                let selectionStart = input.selectionStart;
+                
+                // 2. Заменяем точку на запятую
+                let oldValue = input.value;
+                let newValue = oldValue.replace('.', ',');
+                
+                // 3. Оставляем только цифры и одну запятую (регулярка)
+                newValue = newValue.replace(/[^0-9,]/g, ''); // Удаляем всё кроме цифр и запятой
+                
+                // Если значение изменилось, обновляем его и возвращаем курсор
+                if (oldValue !== newValue) {
+                    input.value = newValue;
+                    // Возвращаем курсор на место (корректно работает для type="text")
+                    input.setSelectionRange(selectionStart, selectionStart);
+                }
+            }
+        });
+
         inputs.forEach(input => {
             input.addEventListener('focus', function() {
                 const td = this.closest('td');
@@ -165,34 +188,53 @@
         });
     });
 
-    /**
-     * Ваша существующая функция сбора данных (без изменений)
-     */
+    // Функция сбора данных (без изменений)
     function collectMatrixData(event) {
         if (event) event.preventDefault();
+        
         const stopsCount = {{ route.stops | length }};
         let matrix = [];
         for (let i = 0; i < stopsCount; i++) {
             matrix[i] = new Array(stopsCount).fill(null);
         }
+
         const cells = document.querySelectorAll('.price-matrix td[data-start-index]');
+        
         cells.forEach(cell => {
             const i = parseInt(cell.getAttribute('data-start-index'));
             const j = parseInt(cell.getAttribute('data-end-index'));
             let priceData = {};
+            
             const inputs = cell.querySelectorAll('.price-input');
             inputs.forEach(input => {
                 const tariffId = input.getAttribute('data-tariff-id');
-                let value = input.value.trim();
-                let numericValue = null;
-                if (value !== '' && !isNaN(parseFloat(value))) {
-                    numericValue = parseFloat(parseFloat(value).toFixed(2));
+                
+                // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ТУТ:
+                let rawValue = input.value.trim().replace(',', '.');
+                
+                let numericValue = 0;
+                if (rawValue !== '') {
+                    let parsed = parseFloat(rawValue);
+                    if (!isNaN(parsed)) {
+                        // Округляем до 2 знаков, чтобы избежать проблем с точностью float
+                        numericValue = Math.round(parsed * 100) / 100;
+                    }
                 }
-                priceData[tariffId] = numericValue || 0;
+                
+                priceData[tariffId] = numericValue;
+                
+                // Визуально обновляем инпут, чтобы пользователь видел, что сохранилось (с точкой)
+                input.value = numericValue.toFixed(2).replace('.', ','); // меняем обратно на запятую для красоты
             });
+            
             matrix[i][j] = priceData;
         });
-        document.getElementById('price-matrix-data').value = JSON.stringify(matrix);
+
+        // Помещаем JSON в скрытое поле
+        const jsonData = JSON.stringify(matrix);
+        document.getElementById('price-matrix-data').value = jsonData;
+        
+        console.log("Отправка данных:", jsonData); // Для отладки в консоли
         document.getElementById('price-matrix-form').submit();
         return false;
     }

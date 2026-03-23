@@ -61,11 +61,14 @@
         </p>
 
         {% if form.tariff_tables.errors %}
-            <div class="alert alert-danger shadow-sm">
-                <h6 class="alert-heading fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>Ошибка в структуре таблиц:</h6>
+            <div class="alert alert-danger">
+                <h5 class="alert-heading">Ошибка в структуре таблиц:</h5>
                 <ul class="mb-0">
                     {% for error in form.tariff_tables.errors %}
-                        <li>{{ error }}</li>
+                        {# Выводим только если это обычная строка и в ней нет признаков словаря/дампа #}
+                        {% if error is string and '{' not in error and '}' not in error %}
+                            <li>{{ error }}</li>
+                        {% endif %}
                     {% endfor %}
                 </ul>
             </div>
@@ -265,6 +268,24 @@
         if (submitButton) {
             submitButton.disabled = true;
             submitButton.textContent = 'Сохранение...';
+        }
+    });
+
+    document.addEventListener('input', function (event) {
+        // Проверяем, что изменение произошло в поле кода таблицы
+        if (event.target && event.target.name && event.target.name.includes('table_type_code')) {
+            let input = event.target;
+            let start = input.selectionStart;
+            let end = input.selectionEnd;
+
+            // Автоматически переводим в заглавные и убираем пробелы
+            let newValue = input.value.toUpperCase().replace(/\s/g, '');
+            
+            if (input.value !== newValue) {
+                input.value = newValue;
+                // Возвращаем курсор на место (чтобы он не прыгал в конец)
+                input.setSelectionRange(start, end);
+            }
         }
     });
 

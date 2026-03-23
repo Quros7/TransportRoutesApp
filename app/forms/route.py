@@ -103,52 +103,67 @@ class RouteInfoForm(FlaskForm):
             return True
 
         except Exception as e:
+            # Собираем список сообщений, которые мы уже "пристроили" к полям,
+            # чтобы они не дублировались в верхнем розовом блоке.
+            assigned_errors = set()
+
             for error in e.errors():
-                raw_msg = error["msg"]
                 field_path = list(error["loc"])
-                clean_msg = raw_msg
+                raw_msg = error["msg"]
+                
+                # Убираем техническую приставку Pydantic, сохраняя регистр букв
+                clean_msg = raw_msg.replace("Value error, ", "")
 
-                # --- НОВАЯ ЛОГИКА АДРЕСАЦИИ ---
-                # Если мы сами пометили ошибку в models.py (ID:index:field:msg)
-                if "ID:" in raw_msg:
+                # 1. Специфическая фильтрация системного мусора Pydantic
+                # Игнорируем пустые скобки и дампы словарей, которые пугают пользователя
+                if clean_msg.strip() in ["{}", "[]", ""] or "{'" in clean_msg:
+                    continue
+
+                # 2. Обработка ошибок КОНКРЕТНЫХ ПОЛЕЙ внутри таблиц
+                # Путь выглядит так: ['tariff_tables', 0, 'stop_name']
+                if len(field_path) == 3 and field_path[0] == "tariff_tables":
+                    table_idx = field_path[1]
+                    subfield_name = field_path[2]
+                    
+                    if table_idx < len(self.tariff_tables.entries):
+                        entry = self.tariff_tables.entries[table_idx]
+                        if hasattr(entry.form, subfield_name):
+                            target_field = getattr(entry.form, subfield_name)
+                            if clean_msg not in target_field.errors:
+                                target_field.errors.append(clean_msg)
+                                assigned_errors.add(clean_msg)
+                    continue
+
+                # 3. Обработка нашего кастомного маркера ID:index:field (из models.py)
+                if "ID:" in clean_msg:
                     try:
-                        _, idx, field, msg = raw_msg.split(":", 3)
-                        field_path = ["tariff_tables", int(idx), field]
-                        clean_msg = msg.strip()
-                    except ValueError:
+                        # Формат: "ID:0:table_type_code:Сообщение"
+                        _, idx, subfield, msg = clean_msg.split(":", 3)
+                        idx = int(idx)
+                        if idx < len(self.tariff_tables.entries):
+                            entry = self.tariff_tables.entries[idx]
+                            target_field = getattr(entry.form, subfield)
+                            if msg not in target_field.errors:
+                                target_field.errors.append(msg)
+                                assigned_errors.add(msg)
+                        continue
+                    except (ValueError, AttributeError):
                         pass
-                
-                # Если пришла "грязная" ошибка Pydantic со словарем
-                elif isinstance(raw_msg, str) and "{'" in raw_msg:
-                    import re
-                    match = re.search(r"':\s*\[?'([^']+)'", raw_msg)
-                    clean_msg = match.group(1) if match else raw_msg
-                else:
-                    clean_msg = raw_msg.replace("Value error, ", "").capitalize()
 
-                # --- РАСПРЕДЕЛЕНИЕ ОШИБОК ПО ФОРМЕ ---
-                if len(field_path) >= 3 and field_path[0] == "tariff_tables":
-                    # Ошибка конкретного поля (ПОД ИНПУТ)
-                    table_index = field_path[1]
-                    subfield = field_path[2]
-                    if table_index < len(self.tariff_tables.entries):
-                        entry = self.tariff_tables.entries[table_index]
-                        if hasattr(entry.form, subfield):
-                            # Предотвращаем дубликат текста в одном поле
-                            if clean_msg not in getattr(entry.form, subfield).errors:
-                                getattr(entry.form, subfield).errors.append(clean_msg)
-                
-                elif len(field_path) == 2 and field_path[0] == "tariff_tables":
-                    # Общая ошибка структуры (В РОЗОВЫЙ БЛОК)
-                    if clean_msg not in self.tariff_tables.errors:
+                # 4. Обработка ОБЩИХ ошибок списка таблиц (например, "минимум 1 таблица")
+                if field_path == ["tariff_tables"]:
+                    if clean_msg not in self.tariff_tables.errors and clean_msg not in assigned_errors:
                         self.tariff_tables.errors.append(clean_msg)
-                
-                elif len(field_path) == 1:
-                    # Основные поля (region_code и т.д.)
+                    continue
+
+                # 5. Обработка всех остальных полей формы (верхний уровень)
+                if len(field_path) > 0:
                     field_name = field_path[0]
                     if hasattr(self, field_name):
-                        getattr(self, field_name).errors.append(clean_msg)
-            
+                        target_field = getattr(self, field_name)
+                        if clean_msg not in target_field.errors:
+                            target_field.errors.append(clean_msg)
+
             return False
 
 

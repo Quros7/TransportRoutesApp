@@ -60,20 +60,28 @@ class TariffTableEntryModel(BaseModel):
     @field_validator("table_type_code")
     @classmethod
     def validate_table_type_code(cls, v):
-        if v not in ["02", "P", "T", "F"]:
-            raise ValueError('Допускается только "02" (для первой таблицы), "P", "T" или "F".')
-        return v
+        if not isinstance(v, str):
+            return v
+        
+        # 1. Удаляем пробелы по краям и переводим в верхний регистр (Разрешаем и маленькие, и большие)
+        v_clean = v.strip().upper()
+        
+        # 2. Проверяем соответствие разрешенным кодам
+        if v_clean not in ["02", "P", "T", "F"]:
+            # Важно: Сообщение об ошибке теперь содержит только заглавные буквы
+            raise ValueError('Допускается только "02", "P", "T" или "F".')
+            
+        return v_clean
 
     @field_validator("ss_series_codes")
     @classmethod
     def validate_ss_series_codes(cls, v):
         if not v.strip():
-            raise ValueError('Введите коды серий SS без пробелов, разделяя их с помощью ";". Каждая серия должна быть 2-значным числом.')
-
-        # pattern = r"^(\d{2}|[A-Z])(;(\d{2}|[A-Z]))*$"
+            raise ValueError('Введите коды серий SS через ";".')
+        
         pattern = r"^(\d{2})(;(\d{2}))*$"
         if not re.match(pattern, v):
-            raise ValueError('Введите коды серий SS без пробелов, разделяя их с помощью ";". Каждая серия должна быть 2-значным числом.')
+            raise ValueError('Каждая серия должна быть 2-значным числом, разделитель ";".')
         return v
 
 
@@ -149,28 +157,22 @@ class RouteInfoModel(BaseModel):
         all_ss_codes = set()
 
         for i, entry in enumerate(v):
-            # 1. Правила для Таблицы 1 (i == 0)
+            # Используем наш спец-маркер ID:index:field для точного маппинга в форму
+            
+            # 1. Проверка типа для первой и последующих таблиц
             if i == 0:
                 if entry.table_type_code != "02":
-                    raise ValueError('Таблица 1 должна начинаться с кода "02".')
-
-                # Проверяем, что список серий SS не пуст
-                ss_codes = [c.strip() for c in entry.ss_series_codes.split(";") if c.strip()]
-                if not ss_codes:
-                    raise ValueError('Таблица 1 должна содержать серии SS после "02".')
-
-            # 2. Правила для Таблиц > 1 (i > 0)
+                    raise ValueError(f'ID:{i}:table_type_code:Таблица 1 (основная) должна иметь код "02".')
             else:
                 if entry.table_type_code not in ["P", "T", "F"]:
-                    raise ValueError(f'Таблица {i + 1} должна иметь тип "P", "T" или "F".')
+                    raise ValueError(f'ID:{i}:table_type_code:Для таблицы {i+1} допустимы только "P", "T" или "F".')
 
-            # 3. Проверка уникальности серий SS
+            # 2. Проверка уникальности серий SS
             ss_codes = [c.strip() for c in entry.ss_series_codes.split(";") if c.strip()]
             for code in ss_codes:
                 if code in all_ss_codes:
-                    raise ValueError(f'ID:{i}:ss_series_codes:Серия SS "{code}" указана в тарифных таблицах более 1 раза!')
+                    raise ValueError(f'ID:{i}:ss_series_codes:Серия SS "{code}" уже есть в другой таблице.')
                 all_ss_codes.add(code)
-
         return v
 
 
