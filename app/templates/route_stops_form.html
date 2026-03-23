@@ -28,48 +28,37 @@
             {% for stop_form in form.stops %}
                 <div class="card mb-3 stop-entry">
                     <div class="card-body">
-                        {# Нумерация с 0 #}
-                        <h5 class="card-title">Остановка {{ loop.index0 }}</h5> 
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5 class="card-title mb-0">Остановка {{ loop.index0 }}</h5>
+                            {% if route.transport_type != '0x02' %}
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addStopAfter(this)">
+                                    <i class="fas fa-plus"></i> Вставить после
+                                </button>
+                            {% endif %}
+                        </div>
                         
                         <div class="row">
                             <div class="col-md-9 mb-3">
                                 {{ stop_form.stop_name.label(class="form-label") }}
                                 {{ stop_form.stop_name(class="form-control", placeholder="Название остановки [ID]") }}
-                                {% for error in stop_form.stop_name.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
                             </div>
                             <div class="col-md-3 mb-3">
                                 {{ stop_form.km_distance.label(class="form-label") }}
+                                {% set base_attrs = {'class': 'form-control distance-input', 'data-index': loop.index0} %}
                                 
-                                {# Запрет редактирования расстояния для Остановки 0 #}
-                                {% set base_attrs = {
-                                    'class': 'form-control distance-input',
-                                    'placeholder': '0.00',
-                                    'data-index': loop.index0
-                                } %}
-
                                 {% if loop.index0 == 0 %}
-                                    {# Создаем полный словарь, включая readonly #}
-                                    {% set final_attrs = base_attrs %}
-                                    {# Для старых версий Jinja, где нет combine, нам нужно "объединять" атрибуты вручную. #}
-                                    {# Используем метод, который всегда работает: переопределяем словарь. #}
-                                    {% set final_attrs = dict(final_attrs, readonly=True) %}
+                                    <!-- Для 0-й остановки принудительно ставим 0.00 и readonly -->
+                                    {{ stop_form.km_distance(value="0.00", **dict(base_attrs, readonly=True)) }}
                                 {% else %}
-                                    {% set final_attrs = base_attrs %}
+                                    {{ stop_form.km_distance(**base_attrs) }}
                                 {% endif %}
-
-                                {# Теперь вызываем функцию только с одним словарем аргументов #}
-                                {{ stop_form.km_distance(**final_attrs) }}
-                                
                                 {% for error in stop_form.km_distance.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
                             </div>
                         </div>
                         
-                        {# Кнопка удаления, только если это не Остановка 0 #}
                         {% if loop.index0 > 0 %}
-                            <button type="button" class="btn btn-sm btn-outline-danger remove-stop" onclick="removeStopEntry(this)">Удалить остановку</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-stop" onclick="removeStopEntry(this)">Удалить</button>
                         {% endif %}
-                        
-                        {# {{ stop_form.hidden_tag() }} #}
                     </div>
                 </div>
             {% endfor %}
@@ -107,317 +96,236 @@
     {% block scripts %}
     {{ super() }}
     <script>
-        // Шаблон для новой остановки
-        const stopTemplate = `
-            <div class="card mb-3 stop-entry">
-                <div class="card-body">
-                    <h5 class="card-title">Остановка NEW_INDEX</h5>
-                    
-                    <div class="row">
-                        <div class="col-md-9 mb-3">
-                            <label class="form-label">Название остановки</label>
-                            <input type="text" name="stops-NEW_INDEX-stop_name" class="form-control" placeholder="Название остановки [ID]" required>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Расстояние до зоны (км)</label>
-                            {# ✅ Добавляем класс distance-input и data-index #}
-                            <input type="text" 
-                                name="stops-NEW_INDEX-km_distance" 
-                                class="form-control distance-input" 
-                                placeholder="0.00" 
-                                required 
-                                value="0.00"
-                                data-index="NEW_INDEX" >
-                        </div>
-                    </div>
-                    
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-stop" onclick="removeStopEntry(this)">Удалить остановку</button>
+    // Шаблон теперь не содержит NEW_INDEX в тексте, мы будем менять его динамически
+    const stopTemplate = (index, distance) => `
+        <div class="card mb-3 stop-entry" style="border-left: 4px solid #0d6efd;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="card-title mb-0">Остановка ${index}</h5>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addStopAfter(this)">
+                        <i class="fas fa-plus"></i> Вставить после
+                    </button>
                 </div>
+                <div class="row">
+                    <div class="col-md-9 mb-3">
+                        <label class="form-label">Название остановки</label>
+                        <input type="text" name="stops-${index}-stop_name" class="form-control" placeholder="Название остановки [ID]" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Расстояние до зоны (км)</label>
+                        <input type="text" name="stops-${index}-km_distance" 
+                               class="form-control distance-input" 
+                               value="${distance}" data-index="${index}" required>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-stop" onclick="removeStopEntry(this)">Удалить</button>
             </div>
-        `;
+        </div>
+    `;
 
-        /**
-        * Добавляет новое поле для ввода остановки.
-        */
-        function addStopEntry() {
-            const container = document.getElementById('stops-container');
-            const count = container.querySelectorAll('.stop-entry').length;
-            
-            let newHtml = stopTemplate.replace(/NEW_INDEX/g, count);
-            container.insertAdjacentHTML('beforeend', newHtml);
-            
-            updateStopHeaders(); // Обновление заголовков и состояния полей
-            initDistanceFormatters(); // ✅ Добавляем обработчики к новой остановке
-        }
-
-        /**
-        * Удаляет поле остановки и пересчитывает индексы.
-        */
-        function removeStopEntry(button) {
-            const container = document.getElementById('stops-container');
-            const entry = button.closest('.stop-entry');
-            
-            const entries = container.querySelectorAll('.stop-entry');
-            const index = Array.from(entries).indexOf(entry);
-            
-            // Запрет на удаление Остановки 0
-            if (index === 0) {
-                alert("Начальную остановку (Остановку 0) удалить нельзя.");
-                return;
-            }
-
-            if (entry) {
-                entry.remove();
-                
-                // Пересчет индексов для Flask-WTF
-                //container.querySelectorAll('.stop-entry').forEach((entry, idx) => {
-                //    entry.querySelectorAll('input').forEach(input => {
-                //        if (input.name) {
-                //            // Заменяем старый индекс на новый (stops-N-field_name)
-                //            input.name = input.name.replace(/stops-\d+-/, `stops-${idx}-`);
-                //        }
-                //    });
-                //});
-
-                updateStopHeaders();
-            }
-        }
+    // 1. Функция вставки ПОСЛЕ конкретной остановки
+    function addStopAfter(button) {
+        const currentEntry = button.closest('.stop-entry');
         
-        /**
-        * Функция для пересчета и обновления заголовков всех остановок,
-        * а также для установки режима read-only для Остановки 0.
-        */
-        function updateStopHeaders() {
-            const container = document.getElementById('stops-container');
-            container.querySelectorAll('.stop-entry').forEach((entry, index) => {
-                // 1. Обновляем текст заголовка
-                // Устанавливаем заголовок по порядковому номеру (индекс 0, 1, 2...)
-                entry.querySelector('h5.card-title').textContent = 'Остановка ' + index;
-                
-                // Логика read-only и удаления
-                const removeButton = entry.querySelector('.remove-stop');
-                const kmInput = entry.querySelector('input[name*="km_distance"]');
-                
-                // 2. ОБНОВЛЯЕМ ИМЕНА ПОЛЕЙ (чтобы Flask видел правильный порядок 0, 1, 2...)
-                entry.querySelectorAll('input').forEach(input => {
-                    if (input.name) {
-                        // Заменяем любой старый индекс на актуальный 'index'
-                        input.name = input.name.replace(/stops-\d+-/, `stops-${index}-`);
-                        input.id = input.id.replace(/stops-\d+-/, `stops-${index}-`);
-                    }
-                    // Обновляем data-index для твоего форматировщика
-                    if (input.classList.contains('distance-input')) {
-                        input.dataset.index = index;
-                    }
-                });
+        // Считаем расстояние: берем из текущей + 1.0
+        const currentKmInput = currentEntry.querySelector('.distance-input');
+        let currentKm = parseFloat(currentKmInput.value.replace(',', '.')) || 0;
+        let newKm = (currentKm + 1.0).toFixed(2);
 
-                // 3. Логика read-only для 0-й остановки (оставляем как есть)
+        // Вставляем новый HTML сразу после текущей карточки
+        currentEntry.insertAdjacentHTML('afterend', stopTemplate(0, newKm));
+        
+        finishUpdate();
+    }
+
+    // 2. Стандартная функция (добавление в самый конец)
+    function addStopEntry() {
+        const container = document.getElementById('stops-container');
+        const lastEntry = container.querySelector('.stop-entry:last-child');
+        
+        let newKm = "1.00";
+        if (lastEntry) {
+            let lastKm = parseFloat(lastEntry.querySelector('.distance-input').value.replace(',', '.')) || 0;
+            newKm = (lastKm + 1.0).toFixed(2);
+        }
+
+        container.insertAdjacentHTML('beforeend', stopTemplate(0, newKm));
+        finishUpdate();
+    }
+
+    // 3. Общая функция для обновления индексов и форматов
+    function finishUpdate() {
+        updateStopHeaders();
+        initDistanceFormatters();
+    }
+
+    function removeStopEntry(button) {
+        const entry = button.closest('.stop-entry');
+        const container = document.getElementById('stops-container');
+        const index = Array.from(container.querySelectorAll('.stop-entry')).indexOf(entry);
+
+        if (index === 0) {
+            alert("Начальную остановку удалить нельзя.");
+            return;
+        }
+
+        entry.remove();
+        finishUpdate();
+    }
+
+    function updateStopHeaders() {
+        const container = document.getElementById('stops-container');
+        if (!container) return;
+
+        const entries = container.querySelectorAll('.stop-entry');
+        
+        entries.forEach((entry, index) => {
+            // 1. Обновляем визуальный заголовок (Остановка 0, 1, 2...)
+            const title = entry.querySelector('h5.card-title');
+            if (title) title.textContent = 'Остановка ' + index;
+
+            // 2. Обновляем атрибуты name и id, чтобы Flask-WTF правильно собрал список
+            // Регулярка заменяет любой индекс в "stops-N-field" на текущий "index"
+            entry.querySelectorAll('input, select, textarea').forEach(input => {
+                if (input.name) {
+                    input.name = input.name.replace(/stops-\d+-/, `stops-${index}-`);
+                }
+                if (input.id) {
+                    input.id = input.id.replace(/stops-\d+-/, `stops-${index}-`);
+                }
+            });
+
+            // 3. Работаем с полем расстояния
+            const kmInput = entry.querySelector('.distance-input');
+            if (kmInput) {
+                kmInput.dataset.index = index; // Обновляем data-index для форматтера
+
                 if (index === 0) {
-                    // Остановка 0: Расстояние 0.00 и не удаляется
-                    if (kmInput) {
-                        kmInput.setAttribute('readonly', true);
-                        kmInput.value = '0.00';
-                    }
-                    if (removeButton) removeButton.style.display = 'none';
+                    // ПЕРВАЯ ОСТАНОВКА: всегда 0.00 и только для чтения
+                    kmInput.value = '0.00';
+                    kmInput.setAttribute('readonly', true);
+                    // Добавляем серый фон для наглядности
+                    kmInput.style.backgroundColor = '#e9ecef';
                 } else {
-                    // Остальные остановки: Можно редактировать и удалять
-                    if (kmInput) kmInput.removeAttribute('readonly');
-                    // Кнопка удаления рендерится только для index > 0 (см. Jinja-код)
-                    if (removeButton) removeButton.style.display = 'inline-block'; 
+                    // ОСТАЛЬНЫЕ: разрешаем ввод, если это не readonly от сервера
+                    kmInput.removeAttribute('readonly');
+                    kmInput.style.backgroundColor = '';
+                    
+                    // Если поле пустое (только что добавили), можно оставить пустым 
+                    // или форматтер сам подставит значение при blur
                 }
-            });
-        }
-
-        // --- НОВЫЙ КОД ФОРМАТИРОВАНИЯ ---
-
-        /**
-        * Форматирует входное значение расстояния:
-        * 1. Заменяет запятую на точку.
-        * 2. Парсит число и приводит его к формату N.DD (два знака после разделителя).
-        * 3. Обеспечивает 0.00 для первой остановки.
-        * @param {HTMLElement} inputElement - Поле ввода.
-        */
-        function formatDistance(inputElement) {
-            let value = inputElement.value.trim();
-            
-            // 1. Заменяем запятую на точку для стандартизации
-            value = value.replace(/,/g, '.');
-
-            // Парсим число
-            let num = parseFloat(value);
-            const index = inputElement.dataset.index;
-
-            // Если введено некорректное число, просто выходим.
-            if (isNaN(num)) {
-                if (index !== '0') {
-                    inputElement.value = ''; // Очищаем некорректный ввод (кроме 0-й остановки)
-                }
-                return; 
             }
 
-            // 2. Установка 0.00 для первой остановки, если пользователь попытался что-то ввести
-            if (index === '0') {
-                num = 0.00;
-            }
-
-            // 3. Форматируем число до двух знаков после точки
-            // Ограничиваем максимальное значение 99.99
-            if (num > 99.99) {
-                num = 99.99;
-            }
-            
-            let formattedValue = num.toFixed(2);
-            
-            // Устанавливаем отформатированное значение обратно в поле
-            inputElement.value = formattedValue;
-        }
-
-        /**
-        * Инициализирует обработчики событий для всех полей расстояния.
-        */
-        function initDistanceFormatters() {
-            // Находим все поля ввода расстояния по классу
-            const distanceInputs = document.querySelectorAll('.distance-input');
-
-            distanceInputs.forEach(input => {
-                // Применяем форматирование при потере фокуса (blur)
-                input.addEventListener('blur', function() {
-                    formatDistance(this);
-                });
-                
-                // Применяем форматирование при загрузке (если в данных не N.DD)
-                formatDistance(input); 
-            });
-        }
-
-        // --- КОНЕЦ НОВОГО КОДА ФОРМАТИРОВАНИЯ ---
-
-        // --- НАЧАЛО НОВОГО КОДА ВАЛИДАЦИИ ---
-
-        // Регулярное выражение: соответствует формату XX.XX или X.XX
-        // 99.99 | 9.99 | 0.00
-        const KM_FORMAT_REGEX = /^\d{1,2}\.\d{2}$/; // Две цифры перед точкой (0-99), точка, две цифры после точки
-
-        /**
-        * Выполняет клиентскую валидацию: проверяет, что расстояние строго возрастает
-        * и является числом.
-        * @param {HTMLFormElement} form - Ссылка на форму.
-        * @returns {boolean} - true, если валидация пройдена.
-        */
-        function validateDistances(form) {
-            const entries = form.querySelectorAll('.stop-entry');
-            let previousKm = -1; 
-            
-            // Обходим элементы с помощью for...of, чтобы использовать 'return false' для остановки
-            for (const [index, entry] of entries.entries()) {
-                const kmInput = entry.querySelector('input[name*="km_distance"]');
-                const nameInput = entry.querySelector('input[name*="stop_name"]');
-                
-                if (!kmInput || !nameInput) continue; 
-
-                const stopName = nameInput.value || `№${index}`;
-
-                // // Используем parseFloat для DOM-значения. Заменяем запятую на точку для надежности.
-                // let currentKm = parseFloat(kmInput.value.replace(',', '.')) || 0; 
-                //
-                // if (isNaN(currentKm) || currentKm < 0) {
-                //     alert(`Ошибка: Расстояние до остановки "${stopName}" должно быть неотрицательным числом.`);
-                //     kmInput.focus();
-                //     return false;
-                // }
-
-                // 1. Очистка и округление (для числовой проверки)
-                let inputValue = kmInput.value.replace(',', '.');
-                let currentKm = parseFloat(inputValue); 
-
-                // 2. Проверка числового формата и диапазона (99.99)
-                if (isNaN(currentKm) || currentKm < 0 || currentKm > 99.99) {
-                    alert(`Ошибка: Расстояние до остановки "${stopName}" должно быть числом от 0.00 до 99.99.`);
-                    kmInput.focus();
-                    return false;
-                }
-
-                // 3. Строгая проверка формата (99.99)
-                // Если пользователь ввел 5.40001, parseFloat сделает 5.40001. 
-                // Мы сравним его со строкой, округленной до двух знаков.
-                let formattedString = currentKm.toFixed(2); // Например, 5.40001 -> "5.40"
-                
-                if (inputValue !== formattedString && currentKm.toFixed(2) !== inputValue) {
-                    // Если введенное значение (inputValue) не равно его двухзначному округленному представлению,
-                    // значит, пользователь ввел слишком много знаков после запятой (например, 5.40001).
-                    alert(`Ошибка: Расстояние до остановки "${stopName}" имеет недопустимый формат. Требуется 99.99 (не более двух знаков после запятой и отсутствие ведущих нулей).`);
-                    kmInput.focus();
-                    return false;
-                }
-
-                // 4. Проверка первой остановки (index == 0)
+            // 4. Управление кнопкой удаления
+            const removeBtn = entry.querySelector('.remove-stop');
+            if (removeBtn) {
+                // Остановку 0 удалять нельзя никогда
                 if (index === 0) {
-                    if (currentKm !== 0.0) {
-                        alert('Ошибка: Расстояние до начальной остановки (Остановка 0) должно быть 0.00 км.');
-                        return false;
-                    }
-                } 
-                // 5. Проверка возрастания (для всех, кроме первой)
-                else if (currentKm <= previousKm) {
-                    alert(`Ошибка: Расстояние до остановки "${stopName}" (${currentKm.toFixed(2)} км) должно быть строго больше, чем ${previousKm.toFixed(2)} км.`);
+                    removeBtn.style.display = 'none';
+                } else {
+                    removeBtn.style.display = 'inline-block';
+                }
+            }
+        });
+    }
+
+    function formatDistance(inputElement) {
+        let value = inputElement.value.trim().replace(/,/g, '.');
+        let num = parseFloat(value);
+        const index = inputElement.dataset.index;
+
+        if (isNaN(num)) {
+            if (index !== '0') inputElement.value = '';
+            return; 
+        }
+        if (index === '0') num = 0.00;
+        if (num > 99.99) num = 99.99;
+        inputElement.value = num.toFixed(2);
+    }
+
+    function initDistanceFormatters() {
+        document.querySelectorAll('.distance-input').forEach(input => {
+            input.removeEventListener('blur', handleBlur); // Избегаем дублей
+            input.addEventListener('blur', handleBlur);
+            formatDistance(input); 
+        });
+    }
+
+    function handleBlur() { formatDistance(this); }
+
+    function validateDistances(form) {
+        const entries = form.querySelectorAll('.stop-entry');
+        let previousKm = -1; 
+        
+        for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
+            const kmInput = entry.querySelector('.distance-input');
+            const nameInput = entry.querySelector('input[name*="stop_name"]');
+            
+            if (!kmInput) continue;
+
+            // Подготавливаем значение (запятая -> точка, обрезка пробелов)
+            let valStr = kmInput.value.trim().replace(',', '.');
+            
+            // Если поле пустое, считаем его за 0 для расчетов (чтобы не было NaN)
+            let currentKm = parseFloat(valStr);
+            const stopLabel = nameInput && nameInput.value ? `"${nameInput.value}"` : `№${i}`;
+
+            // 1. Проверка на число
+            if (isNaN(currentKm)) {
+                alert(`Ошибка: Введите числовое значение расстояния для остановки ${stopLabel}.`);
+                kmInput.focus();
+                return false;
+            }
+
+            // 2. Логика для ПЕРВОЙ остановки
+            if (i === 0) {
+                if (currentKm !== 0) {
+                    alert(`Ошибка: Расстояние первой остановки должно быть 0.00 км.`);
+                    kmInput.value = '0.00';
+                    return false;
+                }
+            } 
+            
+            // 3. Логика ВОЗРАСТАНИЯ для последующих остановок
+            else {
+                if (currentKm <= previousKm) {
+                    alert(`Ошибка в Остановке ${i} (${stopLabel}):\nРасстояние (${currentKm.toFixed(2)} км) должно быть СТРОГО БОЛЬШЕ, чем у предыдущей остановки (${previousKm.toFixed(2)} км).`);
                     kmInput.focus();
                     return false;
                 }
-
-                previousKm = currentKm;
             }
 
-            return true;
+            // 4. Ограничение по ТЗ (макс 99.99)
+            if (currentKm > 99.99) {
+                alert(`Ошибка: Расстояние не может превышать 99.99 км.`);
+                kmInput.focus();
+                return false;
+            }
+
+            // Сохраняем текущее расстояние как "предыдущее" для следующей итерации цикла
+            previousKm = currentKm;
         }
+        return true;
+    }
 
-
-    // 💥 ОБРАБОТЧИК ОТПРАВКИ ФОРМЫ
     document.addEventListener('DOMContentLoaded', () => {
-        // !!! ВАЖНО: ЗАМЕНИТЕ 'form' НА СЕЛЕКТОР ИЛИ ID ВАШЕЙ ФОРМЫ !!!
-        // Если ваша форма не имеет ID, можете использовать document.querySelector('form')
-        // Если у нее есть ID, например, id="route-stops-form", используйте:
-        const form = document.querySelector('form'); // Или document.getElementById('route-stops-form'); 
-        
+        const form = document.querySelector('form');
         if (form) {
             form.addEventListener('submit', function (event) {
-                // 1. Проверка, что это кнопка перехода к следующему шагу
                 if (event.submitter && event.submitter.name === 'next_step') {
-                    
-                    updateStopHeaders(); // <--- ПЕРЕД ВАЛИДАЦИЕЙ
-
+                    updateStopHeaders(); 
                     if (!validateDistances(this)) {
-                        event.preventDefault(); // Останавливаем отправку формы
-                        //event.stopPropagation();
+                        event.preventDefault();
+                    } else {
+                        event.submitter.disabled = true;
+                        event.submitter.innerHTML = "Сохранение...";
                     }
                 }
-                // Если нажата кнопка "Добавить остановку" (add_stop), валидацию пропускаем
-
-                // 2. ЗАЩИТА ОТ ДВОЙНОГО КЛИКА
-                const btn = event.submitter;
-                
-                // Чтобы кнопка не выглядела "сломанной", добавим индикатор загрузки
-                btn.disabled = true; 
-                const originalText = btn.innerHTML;
-                btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Сохранение...`;
-
-                // Если вдруг форма не отправится по техническим причинам, 
-                // через 10 секунд вернем кнопку в рабочее состояние
-                setTimeout(() => {
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                }, 15000);
-            }, false);
+            });
         }
-    });
-
-    // --- КОНЕЦ НОВОГО КОДА ВАЛИДАЦИИ ---
-
-    // Инициализация при загрузке страницы
-    window.onload = function() {
         updateStopHeaders();
-        initDistanceFormatters(); // Инициализация форматирования для существующих полей
-    };
-
-
+        initDistanceFormatters();
+    });
 </script>
 {% endblock %}
