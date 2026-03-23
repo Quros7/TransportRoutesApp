@@ -9,7 +9,7 @@ class ImportRouteForm(FlaskForm):
         "Выберите файл конфигурации",
         validators=[
             FileRequired(),
-            FileAllowed(["txt"], "Только текстовые файлы конфигурации!"),
+            # FileAllowed(["txt"], "Только текстовые файлы конфигурации!"),
         ],
     )
     submit = SubmitField("Загрузить и импортировать")

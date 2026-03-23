@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from flask_wtf import FlaskForm
 from wtforms import FieldList, FormField, HiddenField, SelectField, StringField, SubmitField
-from wtforms.validators import DataRequired, ValidationError
+from wtforms.validators import DataRequired, Regexp, ValidationError, Length
 
 from app.constants import TRANSPORT_TYPE_CHOICES
 
@@ -38,9 +38,17 @@ class RouteInfoForm(FlaskForm):
     route_name = StringField("Название маршрута", validators=[DataRequired()])
 
     route_number = StringField(
-        "Номер маршрута (напр., 854)",
-        validators=[DataRequired()],
+        "Номер маршрута (напр., 854, 651/66, 854у)",
+        validators=[
+            DataRequired(message="Это поле обязательно для заполнения"),
+            Length(max=6, message="Номер не может быть длиннее 6 символов"),
+            Regexp(
+                r"^[0-9a-zA-Zа-яА-Я/\-]*$", 
+                message="Используйте только цифры, буквы, тире или дробь"
+            )
+        ],
         filters=[lambda x: x.zfill(6) if x else x],
+        # filters=[lambda x: x.zfill(6) if (x and x.isdigit()) else x],
     )
 
     transport_type = SelectField(
@@ -62,9 +70,10 @@ class RouteInfoForm(FlaskForm):
     def validate(self, extra_validators=None):
         """Override validate to use Pydantic validation."""
         # First run WTForms validation for CSRF and basic field validation
-        if not super().validate(extra_validators=extra_validators):
+        standard_valid = super().validate(extra_validators=extra_validators)
+        if not standard_valid:
             return False
-
+        
         # Now validate with Pydantic
         try:
             # Convert form data to Pydantic model
@@ -94,26 +103,52 @@ class RouteInfoForm(FlaskForm):
             return True
 
         except Exception as e:
-            # Map Pydantic errors back to WTForms
             for error in e.errors():
-                field_path = error["loc"]
-                if len(field_path) == 1:
-                    # Top-level field
+                raw_msg = error["msg"]
+                field_path = list(error["loc"])
+                clean_msg = raw_msg
+
+                # --- НОВАЯ ЛОГИКА АДРЕСАЦИИ ---
+                # Если мы сами пометили ошибку в models.py (ID:index:field:msg)
+                if "ID:" in raw_msg:
+                    try:
+                        _, idx, field, msg = raw_msg.split(":", 3)
+                        field_path = ["tariff_tables", int(idx), field]
+                        clean_msg = msg.strip()
+                    except ValueError:
+                        pass
+                
+                # Если пришла "грязная" ошибка Pydantic со словарем
+                elif isinstance(raw_msg, str) and "{'" in raw_msg:
+                    import re
+                    match = re.search(r"':\s*\[?'([^']+)'", raw_msg)
+                    clean_msg = match.group(1) if match else raw_msg
+                else:
+                    clean_msg = raw_msg.replace("Value error, ", "").capitalize()
+
+                # --- РАСПРЕДЕЛЕНИЕ ОШИБОК ПО ФОРМЕ ---
+                if len(field_path) >= 3 and field_path[0] == "tariff_tables":
+                    # Ошибка конкретного поля (ПОД ИНПУТ)
+                    table_index = field_path[1]
+                    subfield = field_path[2]
+                    if table_index < len(self.tariff_tables.entries):
+                        entry = self.tariff_tables.entries[table_index]
+                        if hasattr(entry.form, subfield):
+                            # Предотвращаем дубликат текста в одном поле
+                            if clean_msg not in getattr(entry.form, subfield).errors:
+                                getattr(entry.form, subfield).errors.append(clean_msg)
+                
+                elif len(field_path) == 2 and field_path[0] == "tariff_tables":
+                    # Общая ошибка структуры (В РОЗОВЫЙ БЛОК)
+                    if clean_msg not in self.tariff_tables.errors:
+                        self.tariff_tables.errors.append(clean_msg)
+                
+                elif len(field_path) == 1:
+                    # Основные поля (region_code и т.д.)
                     field_name = field_path[0]
                     if hasattr(self, field_name):
-                        getattr(self, field_name).errors.append(error["msg"])
-                elif len(field_path) >= 2 and field_path[0] == "tariff_tables":
-                    # Tariff table error
-                    table_index = field_path[1]
-                    if len(field_path) >= 3:
-                        subfield = field_path[2]
-                        if table_index < len(self.tariff_tables.entries):
-                            entry = self.tariff_tables.entries[table_index]
-                            if hasattr(entry.form, subfield):
-                                getattr(entry.form, subfield).errors.append(error["msg"])
-                    else:
-                        # General tariff table error
-                        self.tariff_tables.errors.append(error["msg"])
+                        getattr(self, field_name).errors.append(clean_msg)
+            
             return False
 
 
@@ -161,7 +196,6 @@ class RouteStopsForm(FlaskForm):
 
         except Exception as e:
             # Map Pydantic errors back to WTForms
-            print("Pydantic validation errors:", e.errors())  # Debug print
             for error in e.errors():
                 field_path = error["loc"]
                 if len(field_path) >= 2 and field_path[0] == "stops":

@@ -60,6 +60,17 @@
             <b>Остальные таблицы:</b> Код <b>P</b>, <b>T</b> или <b>F</b>, содержат серии проездных.
         </p>
 
+        {% if form.tariff_tables.errors %}
+            <div class="alert alert-danger shadow-sm">
+                <h6 class="alert-heading fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>Ошибка в структуре таблиц:</h6>
+                <ul class="mb-0">
+                    {% for error in form.tariff_tables.errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
         <div id="tariff-tables-container">
             {# Рендеринг существующих тарифных таблиц #}
             {# ИТЕРАЦИЯ ПО form.tariff_tables #}
@@ -84,7 +95,7 @@
 
                         <div class="mb-3">
                             {{ entry_form.form.ss_series_codes.label(class="form-label") }}
-                            {{ entry_form.form.ss_series_codes(class="form-control ss-codes-input", placeholder="Коды серий SS через ';', напр. 15;20;58") }}
+                            {{ entry_form.form.ss_series_codes(class="form-control ss-codes-input", placeholder="Например: 28 или 15;20;58") }}
                             {% for error in entry_form.form.ss_series_codes.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
                         </div>
                         
@@ -139,8 +150,8 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Коды серий SS (через ";")</label>
-                    <input type="text" name="tariff_tables-NEW_INDEX-ss_series_codes" class="form-control ss-codes-input" placeholder="Коды серий SS через ';', напр. 15;20;58" required>
+                    <label class="form-label">Коды серий SS (через ";"). (В конце ";" ставить не нужно!)</label>
+                    <input type="text" name="tariff_tables-NEW_INDEX-ss_series_codes" class="form-control ss-codes-input" placeholder="Например: 28 или 15;20;58" required>
                 </div>
                 
                 <button type="button" class="btn btn-sm btn-outline-danger remove-tariff-table" onclick="removeTariffTableEntry(this)">Удалить таблицу</button>

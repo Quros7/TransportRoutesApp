@@ -68,16 +68,17 @@ class TariffTableEntryModel(BaseModel):
     @classmethod
     def validate_ss_series_codes(cls, v):
         if not v.strip():
-            raise ValueError('Введите коды серий SS без пробелов через ";". Каждая серия должна быть 2-значным числом (или буквенным кодом).')
+            raise ValueError('Введите коды серий SS без пробелов, разделяя их с помощью ";". Каждая серия должна быть 2-значным числом.')
 
-        pattern = r"^(\d{2}|[A-Z])(;(\d{2}|[A-Z]))*$"
+        # pattern = r"^(\d{2}|[A-Z])(;(\d{2}|[A-Z]))*$"
+        pattern = r"^(\d{2})(;(\d{2}))*$"
         if not re.match(pattern, v):
-            raise ValueError('Введите коды серий SS без пробелов через ";". Каждая серия должна быть 2-значным числом (или буквенным кодом).')
+            raise ValueError('Введите коды серий SS без пробелов, разделяя их с помощью ";". Каждая серия должна быть 2-значным числом.')
         return v
 
 
 class StopModel(BaseModel):
-    stop_name: str = Field(..., min_length=1, max_length=19)
+    stop_name: str = Field(..., min_length=1, max_length=100)
     km_distance: Decimal = Field(..., le=Decimal("99.99"))
 
     @field_validator("km_distance")
@@ -101,8 +102,9 @@ class RouteInfoModel(BaseModel):
     carrier_id: str = Field(..., pattern=r"^\d{1,4}$")
     unit_id: str = Field(..., pattern=r"^\d{1,4}$")
     decimal_places: str = Field(..., pattern=r"^[012]$")
-    route_name: str = Field(..., min_length=1, max_length=30)
-    route_number: str = Field(..., pattern=r"^\d{1,6}$")
+    route_name: str = Field(..., min_length=1, max_length=120)
+    # route_number: str = Field(..., pattern=r"^\d{1,6}$")
+    route_number: str = Field(..., pattern=r"^[0-9a-zA-Zа-яА-Я/\-]{1,6}$")
     transport_type: str
     tariff_tables: list[TariffTableEntryModel] = Field(..., min_length=1, max_length=15)
 
@@ -124,7 +126,11 @@ class RouteInfoModel(BaseModel):
     @field_validator("route_number")
     @classmethod
     def format_route_number(cls, v):
+        if not re.match(r"^[0-9a-zA-Zа-яА-Я/\-]{1,6}$", v):
+            raise ValueError("Номер маршрута должен содержать от 1 до 6 символов (цифры, буквы, / или -)")
+        
         return v.zfill(6)
+        # return v.zfill(6) if v.isdigit() else v
 
     @field_validator("transport_type")
     @classmethod
@@ -162,7 +168,7 @@ class RouteInfoModel(BaseModel):
             ss_codes = [c.strip() for c in entry.ss_series_codes.split(";") if c.strip()]
             for code in ss_codes:
                 if code in all_ss_codes:
-                    raise ValueError(f'Серия SS "{code}" в Таблице {i + 1} уже присутствует в другой таблице.')
+                    raise ValueError(f'ID:{i}:ss_series_codes:Серия SS "{code}" указана в тарифных таблицах более 1 раза!')
                 all_ss_codes.add(code)
 
         return v
@@ -176,7 +182,7 @@ class RouteStopsModel(BaseModel):
     # treated as city during validation. We originally observed this bug when
     # intercity routes (0x40) were incorrectly rejected as "городской".
     transport_type: str  # Need this for validation
-    stops: list[StopModel] = Field(..., min_length=1)
+    stops: list[StopModel] = Field(..., min_length=1, max_length=100)
 
     @field_validator("stops")
     @classmethod

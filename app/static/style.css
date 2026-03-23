@@ -32,6 +32,16 @@ body {
 }
 
 
+/* ШАГ 1 - ИНФОРМАЦИЯ О МАРШРУТЕ*/
+
+/* Прижимаем блоки к самому низу */
+#route-info-form .row > [class*="col-"], 
+#route-info-form .row > [class*="col-"] {
+    margin-top: auto;
+}
+
+/* ШАГ 3 - ЦЕНЫ */
+
 /* Подсветка самой ячейки с инпутами */
 .table-active-cell {
     background-color: #fff9c4 !important; /* Светло-желтый */
@@ -65,7 +75,6 @@ body {
     outline: 2px solid #fbc02d !important;
     z-index: 5;
 }
-
 
 
 /* 1. Контейнер для прокрутки */

@@ -213,7 +213,7 @@ def edit_route_stops(route_id):
         # Важный момент: WTForms сам разберет request.form,
         # если названия полей в JS (stops-N-...) совпадают с ожиданиями FieldList
         form = RouteStopsForm(request.form, route=route)
-        print(f"DEBUG: Полученные ключи формы: {list(request.form.keys())}")
+        # print(f"DEBUG: Полученные ключи формы: {list(request.form.keys())}")
     else:
         # Для GET создаем форму и наполняем её данными из БД
         form = RouteStopsForm(route=route)
@@ -228,7 +228,7 @@ def edit_route_stops(route_id):
 
     # print(f"DEBUG: CSRF в форме: {form.csrf_token.data}")
     # print(f"DEBUG: CSRF в запросе: {request.form.get('csrf_token')}")
-    print(f"DEBUG: Ошибки формы до валидации: {form.errors}")
+    # print(f"DEBUG: Ошибки формы до валидации: {form.errors}")
 
     # 1. ОБРАБОТКА POST-ЗАПРОСА
     if form.validate_on_submit():
@@ -274,7 +274,7 @@ def edit_route_stops(route_id):
 
     # 2. ЕСЛИ ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)
     elif request.method == "POST":
-        print("DEBUG: ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)")
+        # print("DEBUG: ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)")
         # Собираем ошибки из всех уровней формы
         for field, errors in form.errors.items():
             if isinstance(errors, list):
@@ -542,8 +542,8 @@ def generate_config(route_id):
         # Подготовка к отправке
         buffer.seek(0)
 
-        # Формируем имя файла (TRFZ_номер_дата.txt)
-        filename = f"TRFZ_{route.route_number}_{current_date}.txt"
+        # Формируем имя файла (Код региона_ID Перевозчика_ID Подразделения_Название маршрута_Дата)
+        filename = f"{route.region_code}_{route.carrier_id}_{route.unit_id}_{route.route_name}_{current_date}"
         log_action(
             action="route_config_generated",
             entity_type="route",
@@ -566,6 +566,11 @@ def generate_bulk_config():
     # 1. Получаем список ID выбранных маршрутов из формы
     # В HTML чекбоксы будут иметь name="route_ids"
     route_ids = request.form.getlist("route_ids")
+
+    # Лимит 10 маршрутов
+    if len(route_ids) > 10:
+        flash("Ошибка: В один файл можно включить не более 10 маршрутов.", "danger")
+        return redirect(url_for("route_management.route_list"))
 
     # 2. Инициализируем и валидируем форму шапки
     # Если форма не пройдет валидацию, мы не сможем получить ее данные (data)
@@ -633,7 +638,9 @@ def generate_bulk_config():
 
         # --- ОТПРАВКА ---
         buffer.seek(0)
-        filename = f"TRFZ_BULK_{current_date}_({len(routes)}routes).txt"
+        # Формируем имя файла (Код региона_ID Перевозчика_ID Подразделения_Название маршрута_Дата)
+        filename = f"{rr}_{tttt}_{dddd}_({len(routes)}routes)_{current_date}"
+        # filename = f"TRFZ_BULK_{current_date}_({len(routes)}routes).txt"
         log_action(
             action="routes_bulk_config_generated",
             entity_type="route",

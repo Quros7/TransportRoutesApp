@@ -59,6 +59,7 @@
                     <div class="ms-3 text-secondary" id="selected-count-display">
                         Выбрано: 0
                     </div>
+                    <div class="ms-3 text-secondary" id="limit-hint">(Максимум 10 маршрутов на один файл)</small>
                 </div>
             </div>
 
@@ -111,95 +112,96 @@
                                         <span class="badge bg-warning text-dark" data-bs-toggle="tooltip" title="Требуется заполнение или проверка данных (Остановки, Цены).">В работе</span>
                                     {% endif %}
                                 </td>
-                                <td class="d-flex justify-content-center align-items-center"> 
-
-                                    {# Кнопки действий #}
-                                    <a href="{{ url_for('route_management.create_or_edit_route_info', route_id=route.id) }}" 
-                                       class="btn btn-sm btn-success me-2" 
-                                       data-bs-toggle="tooltip" title="Редактировать информацию">
-                                        <i class="fas fa-edit"></i> Инфо
-                                    </a>
-                                    
-                                    {% if route.stops_set %}
-                                        <span data-bs-toggle="tooltip" title="Редактировать остановки">
-                                            <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
-                                            class="btn btn-sm btn-success me-2">
-                                                <i class="fas fa-map-marker-alt"></i> Остановки
-                                            </a>
-                                        </span>
-                                    {% else %}
-                                        <span data-bs-toggle="tooltip" title="Редактировать остановки">
-                                            <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
-                                            class="btn btn-sm btn-outline-success me-2">
-                                                <i class="fas fa-map-marker-alt"></i> Остановки
-                                            </a>
-                                        </span>
-                                    {% endif %}
-
-                                    {#<a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" #}
-                                    {#   class="btn btn-sm btn-outline-success me-2" #}
-                                    {#   data-bs-toggle="tooltip" title="Редактировать остановки">#}
-                                    {#    <i class="fas fa-map-marker-alt"></i> Остановки#}
-                                    {#</a>#}
-
-                                    {% if route.stops_set %}
-                                        {% if route.is_completed %}
-                                            <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
-                                                <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
+                                <td> 
+                                    <div class="d-flex justify-content-center align-items-center">
+                                        {# Кнопки действий #}
+                                        <a href="{{ url_for('route_management.create_or_edit_route_info', route_id=route.id) }}" 
+                                        class="btn btn-sm btn-success me-2" 
+                                        data-bs-toggle="tooltip" title="Редактировать информацию">
+                                            <i class="fas fa-edit"></i> Инфо
+                                        </a>
+                                        
+                                        {% if route.stops_set %}
+                                            <span data-bs-toggle="tooltip" title="Редактировать остановки">
+                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
                                                 class="btn btn-sm btn-success me-2">
-                                                    <i class="fas fa-dollar-sign"></i> Цены
+                                                    <i class="fas fa-map-marker-alt"></i> Остановки
                                                 </a>
                                             </span>
                                         {% else %}
-                                            <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
-                                                <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
+                                            <span data-bs-toggle="tooltip" title="Редактировать остановки">
+                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
                                                 class="btn btn-sm btn-outline-success me-2">
+                                                    <i class="fas fa-map-marker-alt"></i> Остановки
+                                                </a>
+                                            </span>
+                                        {% endif %}
+
+                                        {#<a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" #}
+                                        {#   class="btn btn-sm btn-outline-success me-2" #}
+                                        {#   data-bs-toggle="tooltip" title="Редактировать остановки">#}
+                                        {#    <i class="fas fa-map-marker-alt"></i> Остановки#}
+                                        {#</a>#}
+
+                                        {% if route.stops_set %}
+                                            {% if route.is_completed %}
+                                                <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
+                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
+                                                    class="btn btn-sm btn-success me-2">
+                                                        <i class="fas fa-dollar-sign"></i> Цены
+                                                    </a>
+                                                </span>
+                                            {% else %}
+                                                <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
+                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
+                                                    class="btn btn-sm btn-outline-success me-2">
+                                                        <i class="fas fa-dollar-sign"></i> Цены
+                                                    </a>
+                                                </span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span data-bs-toggle="tooltip" title="Сначала укажите остановки!">
+                                                <a href="#" class="btn btn-sm btn-outline-success me-2 disabled" style="pointer-events: none;">
                                                     <i class="fas fa-dollar-sign"></i> Цены
                                                 </a>
                                             </span>
                                         {% endif %}
-                                    {% else %}
-                                        <span data-bs-toggle="tooltip" title="Сначала укажите остановки!">
-                                            <a href="#" class="btn btn-sm btn-outline-success me-2 disabled" style="pointer-events: none;">
-                                                <i class="fas fa-dollar-sign"></i> Цены
-                                            </a>
-                                        </span>
-                                    {% endif %}
 
-                                    {# <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" #}
-                                    {#   class="btn btn-sm btn-outline-info me-2"#}
-                                    {#   data-bs-toggle="tooltip" title="Редактировать матрицу цен">#}
-                                    {#    <i class="fas fa-dollar-sign"></i> Цены#}
-                                    {#</a>#}
+                                        {# <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" #}
+                                        {#   class="btn btn-sm btn-outline-info me-2"#}
+                                        {#   data-bs-toggle="tooltip" title="Редактировать матрицу цен">#}
+                                        {#    <i class="fas fa-dollar-sign"></i> Цены#}
+                                        {#</a>#}
 
-                                    {#<a href="{{ url_for('route_management.generate_config', route_id=route.id) }}" #}
-                                    {#     class="btn btn-sm btn-primary me-2"#}
-                                    {#     data-bs-toggle="tooltip" title="Скачать файл конфигурации">#}
-                                    {#     <i class="fas fa-download"></i> Конфиг#}
-                                    {#</a>#}
+                                        {#<a href="{{ url_for('route_management.generate_config', route_id=route.id) }}" #}
+                                        {#     class="btn btn-sm btn-primary me-2"#}
+                                        {#     data-bs-toggle="tooltip" title="Скачать файл конфигурации">#}
+                                        {#     <i class="fas fa-download"></i> Конфиг#}
+                                        {#</a>#}
 
-                                    {% if route.is_completed %}
-                                        <span data-bs-toggle="tooltip" title="Скачать файл конфигурации">
-                                            <a href="{{ url_for('route_management.generate_config', route_id=route.id) }}" 
-                                                class="btn btn-sm btn-primary me-2">
-                                                <i class="fas fa-download"></i> Конфиг
-                                            </a>
-                                        </span>
-                                    {% else %}
-                                        <span data-bs-toggle="tooltip" title="Сначала заполните данные маршрута!">
-                                            <a href="{{ url_for('route_management.generate_config', route_id=route.id) }}" 
-                                                class="btn btn-sm btn-primary me-2 disabled">
-                                                <i class="fas fa-download"></i> Конфиг
-                                            </a>
-                                        </span>
-                                    {% endif %}
-                                    
-                                    <button type="button" 
-                                            class="btn btn-sm btn-danger" 
-                                            data-bs-toggle="tooltip" title="Удалить маршрут"
-                                            onclick="confirmDelete('{{ route.id }}', '{{ route.route_name }}');">
-                                        <i class="fas fa-trash"></i> Удалить
-                                    </button>
+                                        {% if route.is_completed %}
+                                            <span data-bs-toggle="tooltip" title="Скачать файл конфигурации">
+                                                <a href="{{ url_for('route_management.generate_config', route_id=route.id) }}" 
+                                                    class="btn btn-sm btn-primary me-2">
+                                                    <i class="fas fa-download"></i> Конфиг
+                                                </a>
+                                            </span>
+                                        {% else %}
+                                            <span data-bs-toggle="tooltip" title="Сначала заполните данные маршрута!">
+                                                <a href="{{ url_for('route_management.generate_config', route_id=route.id) }}" 
+                                                    class="btn btn-sm btn-primary me-2 disabled">
+                                                    <i class="fas fa-download"></i> Конфиг
+                                                </a>
+                                            </span>
+                                        {% endif %}
+                                        
+                                        <button type="button" 
+                                                class="btn btn-sm btn-danger" 
+                                                data-bs-toggle="tooltip" title="Удалить маршрут"
+                                                onclick="confirmDelete('{{ route.id }}', '{{ route.route_name }}');">
+                                            <i class="fas fa-trash"></i> Удалить
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -246,7 +248,17 @@
             countDisplay.textContent = `Выбрано: ${checkedCount}`;
             bulkBtn.disabled = checkedCount === 0; 
 
-            // 2. Синхронизация главного чекбокса
+            // 2. ЛОГИКА ОГРАНИЧЕНИЯ (10 маршрутов)
+            if (checkedCount > 10) {
+                countDisplay.classList.add('text-danger', 'fw-bold');
+                // countDisplay.textContent += ' (Максимум 10 маршрутов!)';
+                bulkBtn.disabled = true; // Блокируем кнопку
+            } else {
+                countDisplay.classList.remove('text-danger', 'fw-bold');
+                bulkBtn.disabled = checkedCount === 0; // Включаем, если выбрано от 1 до 10
+            }
+
+            // 3. Синхронизация главного чекбокса
             if (checkedCount === totalCheckboxes && totalCheckboxes > 0) {
                 selectAll.checked = true;
                 selectAll.indeterminate = false;

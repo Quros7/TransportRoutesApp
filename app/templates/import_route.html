@@ -14,13 +14,15 @@
             <h3 class="mb-0">Импорт маршрута из файла</h3>
         </div>
         <div class="card-body">
-            <p class="text-muted">Загрузите файл конфигурации (.txt), чтобы автоматически создать маршрут.</p>
             
+            <p class="text-muted">Загрузите файл конфигурации (TRFZ), чтобы автоматически создать маршрут.</p>
+
             <form method="POST" enctype="multipart/form-data">
                 {{ form.csrf_token }}
                 <div class="mb-3">
                     {{ form.route_file.label(class="form-label") }}
-                    {{ form.route_file(class="form-control", accept=".txt") }}
+                    <!-- {{ form.route_file(class="form-control", accept=".txt") }} -->
+                    {{ form.route_file(class="form-control") }}
                     {% for error in form.route_file.errors %}
                         <span class="text-danger">{{ error }}</span>
                     {% endfor %}
