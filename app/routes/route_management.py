@@ -681,9 +681,6 @@ def import_route():
         file = form.route_file.data
         try:
             raw_data = file.read()
-
-            # --- ОПРЕДЕЛЕНИЕ КОДИРОВКИ ---
-            # Пробуем декодировать как UTF-8, если не выйдет — берем CP866
             try:
                 content = raw_data.decode("utf-8")
             except UnicodeDecodeError:
@@ -692,109 +689,129 @@ def import_route():
             lines = [line.strip() for line in content.splitlines() if line.strip()]
 
             if len(lines) < 2:
-                flash("Файл пуст или имеет неверный формат", "danger")
+                flash("Файл слишком короткий или поврежден", "danger")
                 return redirect(request.url)
 
-            # --- 1. ПАРСИНГ ШАПКИ ---
+            # --- 1. ПАРСИНГ ОБЩЕЙ ШАПКИ ---
             header = lines[0].split(";")
+            region_code = header[0]
+            carrier_id = header[1]
+            unit_id = header[2]
             dec_places = int(header[4])
             multiplier = 10**dec_places
 
-            # --- 2. ПАРСИНГ R-СТРОКИ ---
-            r_line = lines[1].split(";")
-            r_number = r_line[1]
-            # Убираем возможные артефакты кодировки из названия
-            r_name = r_line[4].strip()
-            zones_count = int(r_line[3])
-            tabs_count = int(r_line[5])
+            # Находим индексы всех строк, начинающихся с R;
+            route_indices = [i for i, line in enumerate(lines) if line.startswith("R;")]
+            
+            if not route_indices:
+                flash("В файле не найдено ни одного маршрута (строки R;)", "warning")
+                return redirect(request.url)
 
-            # --- 3. ИНИЦИАЛИЗАЦИЯ МАРШРУТА ---
-            new_route = Route(
-                user_id=current_user.id,
-                route_name=r_name,
-                route_number=r_number,
-                region_code=header[0],
-                carrier_id=header[1],
-                unit_id=header[2],
-                transport_type=f"0x{r_line[2]}" if not r_line[2].startswith("0x") else r_line[2],
-                decimal_places=dec_places,
-                stops=[],
-                tariff_tables=[],
-                price_matrix=[],
-                stops_set=True,
-                is_completed=True,
-            )
+            imported_count = 0
 
-            # --- 4. ОСТАНОВКИ ---
-            stop_lines = lines[2 : 2 + zones_count]
-            for sl in stop_lines:
-                parts = sl.split(";")
-                new_route.stops.append({"name": parts[2], "km": parts[1]})
+            # --- 2. ЦИКЛ ПО ВСЕМ МАРШРУТАМ В ФАЙЛЕ ---
+            for i, start_idx in enumerate(route_indices):
+                # Определяем, где заканчивается текущий маршрут (до следующей R или до конца файла)
+                end_idx = route_indices[i+1] if i + 1 < len(route_indices) else len(lines)
+                route_block = lines[start_idx:end_idx]
 
-            # --- 5. ТАРИФНЫЕ ТАБЛИЦЫ ---
-            tabs_start = 2 + zones_count
-            tab_lines = lines[tabs_start : tabs_start + tabs_count]
-            tab_ids = []
+                # --- ПАРСИНГ СТРОКИ R ---
+                r_line = route_block[0].split(";")
+                r_number = r_line[1]
+                r_name = r_line[4].strip()
+                zones_count = int(r_line[3])
+                tabs_count = int(r_line[5])
 
-            new_route.tariff_tables = []
+                # Инициализация маршрута
+                new_route = Route(
+                    user_id=current_user.id,
+                    route_name=r_name,
+                    route_number=r_number,
+                    region_code=region_code,
+                    carrier_id=carrier_id,
+                    unit_id=unit_id,
+                    transport_type=f"0x{r_line[2]}" if not r_line[2].startswith("0x") else r_line[2],
+                    decimal_places=dec_places,
+                    stops=[],
+                    tariff_tables=[],
+                    price_matrix=[],
+                    stops_set=True,
+                    is_completed=True,
+                )
 
-            for index, tl in enumerate(tab_lines, start=1):
-                parts = tl.split(";")
-                tab_no = int(parts[0])
-                raw_ss_string = parts[2]
+                # --- ОСТАНОВКИ ---
+                # Остановки идут сразу за строкой R
+                stop_lines = route_block[1 : 1 + zones_count]
+                for sl in stop_lines:
+                    parts = sl.split(";")
+                    if len(parts) >= 3:
+                        new_route.stops.append({"name": parts[2], "km": parts[1]})
 
-                # Парсим список кодов для поля parsed_ss_codes_list
-                ss_list = [c.strip() for c in raw_ss_string.split(";") if c.strip()]
+                # --- ТАРИФНЫЕ ТАБЛИЦЫ ---
+                tabs_start = 1 + zones_count
+                tab_lines = route_block[tabs_start : tabs_start + tabs_count]
+                tab_ids = []
 
-                # Формируем словарь строго по структуре "Шага 1"
-                new_route.tariff_tables.append(
-                    {
+                for idx, tl in enumerate(tab_lines, start=1):
+                    parts = tl.split(";")
+                    tab_no = int(parts[0])
+                    raw_ss_string = parts[2]
+                    ss_list = [c.strip() for c in raw_ss_string.split(";") if c.strip()]
+
+                    new_route.tariff_tables.append({
                         "tab_number": tab_no,
-                        "tariff_name": f"Тариф {index}",
+                        "tariff_name": f"Тариф {idx}",
                         "table_type_code": parts[1],
                         "ss_series_codes": raw_ss_string,
                         "parsed_ss_codes_list": ss_list,
-                    }
+                    })
+                    tab_ids.append(str(tab_no))
+
+                # --- МАТРИЦА ЦЕН ---
+                matrix = [[{} for _ in range(zones_count)] for _ in range(zones_count)]
+                price_lines = route_block[tabs_start + tabs_count :]
+
+                for ml in price_lines:
+                    parts = ml.split(";")
+                    if len(parts) < 3:
+                        continue
+                    
+                    try:
+                        row_idx, col_idx = int(parts[0]), int(parts[1])
+                        prices = parts[2:]
+                        cell_data = {}
+                        for p_idx, p_val in enumerate(prices):
+                            if p_idx < len(tab_ids):
+                                t_id = tab_ids[p_idx]
+                                cell_data[t_id] = float(p_val) / multiplier
+                        
+                        if row_idx < zones_count and col_idx < zones_count:
+                            matrix[row_idx][col_idx] = cell_data
+                            matrix[col_idx][row_idx] = cell_data
+                    except (ValueError, IndexError):
+                        continue
+
+                new_route.price_matrix = matrix
+
+                db.session.add(new_route)
+                imported_count += 1
+                
+                # Логируем каждый маршрут отдельно
+                db.session.flush() # Получаем ID
+                log_action(
+                    action="route_imported",
+                    entity_type="route",
+                    route_id=new_route.id,
+                    details={"route_name": r_name, "route_number": r_number},
                 )
-                tab_ids.append(str(tab_no))
 
-            # --- 6. МАТРИЦА ЦЕН ---
-            matrix = [[{} for _ in range(zones_count)] for _ in range(zones_count)]
-            price_lines = lines[tabs_start + tabs_count :]
-
-            for ml in price_lines:
-                parts = ml.split(";")
-                if len(parts) < 3:
-                    continue
-
-                i, j = int(parts[0]), int(parts[1])
-                prices = parts[2:]
-
-                cell_data = {}
-                for idx, p_val in enumerate(prices):
-                    if idx < len(tab_ids):
-                        t_id = tab_ids[idx]
-                        cell_data[t_id] = float(p_val) / multiplier
-
-                matrix[i][j] = cell_data
-                matrix[j][i] = cell_data
-
-            new_route.price_matrix = matrix
-
-            db.session.add(new_route)
-            db.session.flush()
-            log_action(
-                action="route_imported",
-                entity_type="route",
-                route_id=new_route.id,
-                details={"after": serialize_route(new_route)},
-            )
             db.session.commit()
-            flash(f'Маршрут "{r_name}" успешно импортирован!', "success")
+            flash(f"Успешно импортировано маршрутов: {imported_count}", "success")
             return redirect(url_for("route_management.route_list"))
 
         except Exception as e:
             db.session.rollback()
+            current_app.logger.error(f"Import error: {str(e)}")
             flash(f"Ошибка импорта: {str(e)}", "danger")
             return redirect(request.url)
 
