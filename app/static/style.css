@@ -77,13 +77,6 @@ body {
 }
 
 
-/* 1. Контейнер для прокрутки */
-.table-responsive {
-    max-height: 80vh; /* Ограничиваем высоту, чтобы появился вертикальный скролл */
-    overflow: auto;
-    position: relative;
-}
-
 .price-matrix {
     border-collapse: separate; /* Важно для корректной работы sticky border */
     border-spacing: 0;
@@ -127,4 +120,25 @@ body {
     background-color: #fbc02d !important;
     color: #000 !important;
     z-index: 12 !important; /* Чтобы подсветка была видна над всем */
+}
+
+/* Админка */
+
+/* Общее */
+/* Базовое правило для контейнеров с фиксированным скроллом */
+.sticky-matrix-container {
+    max-height: 80vh; 
+    overflow: auto;
+    position: relative;
+    border: 1px solid #dee2e6; /* Небольшая рамка, чтобы таблица не "висела" в воздухе */
+}
+
+/* Опционально: делаем скролл более тонким и современным */
+.sticky-matrix-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.sticky-matrix-container::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
 }

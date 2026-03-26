@@ -1,0 +1,19 @@
+{% extends 'admin/model/list.html' %}
+
+{% block tail_js %}
+    {{ super() }}
+    <script>
+        (function() {
+            var fixAdmin = function() {
+                var container = document.querySelector('.table-responsive');
+                if (container) {
+                    container.classList.add('sticky-matrix-container');
+                    console.log("Class sticky-matrix-container added to admin table");
+                }
+            };
+            // Запуск сразу и на случай динамической подгрузки
+            fixAdmin();
+            document.addEventListener('DOMContentLoaded', fixAdmin);
+        })();
+    </script>
+{% endblock %}

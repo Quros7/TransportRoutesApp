@@ -23,6 +23,9 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return f"<User {self.username}>"
+    
+    def __str__(self):
+        return f"{self.username} (ID: {self.id})"
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -62,6 +65,9 @@ class Route(db.Model):
 
     def __repr__(self):
         return f"<Route {self.route_name}>"
+    
+    def __str__(self):
+        return f"{self.route_name} №{self.route_number}"
 
 
 class AuditLog(db.Model):

@@ -2,7 +2,7 @@ import json
 from datetime import UTC, datetime
 
 import sqlalchemy as sa
-from flask import abort, redirect, request, url_for
+from flask import abort, redirect, request, url_for, render_template_string
 from flask_admin import Admin, AdminIndexView, expose
 from flask_admin.menu import MenuLink
 from flask_admin.contrib.sqla import ModelView
@@ -13,6 +13,8 @@ from wtforms.validators import DataRequired, Optional
 
 from app import db
 from app.models import AuditLog, Route, User
+
+from app.audit import log_action
 
 
 def _is_admin() -> bool:
@@ -61,6 +63,9 @@ class SecureModelView(ModelView):
     can_export = True
     page_size = 50
 
+    list_template = 'admin/custom_list.html'
+    extra_css = ['/static/style.css']
+
     def is_accessible(self):
         return _is_admin()
 
@@ -68,6 +73,60 @@ class SecureModelView(ModelView):
         if not current_user.is_authenticated:
             return redirect(url_for("auth.login", next=request.url))
         return abort(403)
+    
+    def after_model_change(self, form, model, is_created):
+        action_type = "admin_create" if is_created else "admin_update"
+        
+        # Определяем ID маршрута (для колонки route_id)
+        route_id = model.id if hasattr(model, 'route_name') else getattr(model, 'route_id', None)
+        
+        # Собираем подробные детали
+        details = {
+            "entity": model.__class__.__name__,
+            "via": "Flask-Admin",
+            "object_id": getattr(model, 'id', None),
+            "object_name": str(model), # Будет <User mark>, но ниже мы добавим инфу
+        }
+
+        # Если это обновление, попробуем записать, что именно изменилось
+        if not is_created:
+            changed_data = {}
+            for field in form:
+                # Игнорируем технические поля и пароли из соображений безопасности
+                if field.name not in ['csrf_token', 'password', 'password_hash']:
+                    changed_data[field.name] = str(field.data)
+            details["form_data"] = changed_data
+
+        try:
+            log_action(
+                action=action_type,
+                entity_type=model.__class__.__name__.lower(),
+                route_id=route_id,
+                details=details
+            )
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"!!! LOGGING ERROR: {e}")
+
+    def after_model_delete(self, model):
+        route_id = model.id if hasattr(model, 'route_name') else getattr(model, 'route_id', None)
+        
+        log_action(
+            action="admin_delete",
+            entity_type=model.__class__.__name__.lower(),
+            route_id=route_id,
+            details={
+                "entity": model.__class__.__name__,
+                "object_id": getattr(model, 'id', None),
+                "object_repr": str(model),
+                "via": "Flask-Admin"
+            }
+        )
+        db.session.commit()
+    
+    def render(self, template, **kwargs):
+        return super().render(template, **kwargs)
 
 
 class UserAdminView(SecureModelView):
@@ -90,11 +149,17 @@ class UserAdminView(SecureModelView):
             from flask import flash
             flash('Ошибка: При создании нового пользователя пароль обязателен!', 'error')
             raise Exception('Password is required for new users')
-            
+        
+        print(f"DEBUG: on_model_change called for {model.username}")
         if form.password.data:
             # Если пароль введен (при создании или при редактировании) — хешируем
             model.set_password(form.password.data)
     
+    def after_model_change(self, form, model, is_created):
+        # Добавь этот принт для проверки в консоли сервера
+        print(f"DEBUG: after_model_change TRIGGERED for {model.username}")
+        super().after_model_change(form, model, is_created)
+
     # Чтобы в интерфейсе админки появилась звездочка "обязательно" только при создании
     def edit_form(self, obj=None):
         form = super().edit_form(obj)
@@ -196,7 +261,15 @@ class AuditLogAdminView(SecureModelView):
     @staticmethod
     def _user_formatter(view, context, model, name):
         if model.user:
-            return f"{model.user.username} (ID {model.user_id})"
+            # Динамически получаем имя эндпоинта для UserAdminView
+            # Обычно в Flask-Admin это 'useradminview' (маленькими буквами)
+            try:
+                url = url_for('useradminview.details_view', id=model.user_id)
+            except:
+                # Если не сработало, пробуем альтернативное имя (иногда бывает просто 'user')
+                url = url_for('user.details_view', id=model.user_id)
+            
+            return Markup(f'<a href="{url}">{escape(model.user.username)} (ID {model.user_id})</a>')
         if model.user_id:
             return f"ID {model.user_id}"
         return "-"
@@ -204,7 +277,12 @@ class AuditLogAdminView(SecureModelView):
     @staticmethod
     def _route_formatter(view, context, model, name):
         if model.route:
-            return f"{model.route.route_name} (ID {model.route_id})"
+            try:
+                url = url_for('routeadminview.details_view', id=model.route_id)
+            except:
+                url = url_for('route.details_view', id=model.route_id)
+                
+            return Markup(f'<a href="{url}">{escape(model.route.route_name)} (ID {model.route_id})</a>')
         if model.route_id:
             return f"ID {model.route_id}"
         return "-"
