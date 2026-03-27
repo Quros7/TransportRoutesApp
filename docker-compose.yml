@@ -1,0 +1,15 @@
+services:
+  web:
+    build: .
+    container_name: transport_app_container
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/transport_app # Синхронизация кода: корень проекта на ПК связан с /transport_app в Docker (правишь на ПК — меняется в Docker)
+    environment:
+      - FLASK_APP=transportapp.py
+      - FLASK_DEBUG=1
+      - SECRET_KEY=dev-key-123
+      # Путь к базе внутри контейнера
+      - DATABASE_URL=sqlite:////transport_app/app.db
+    restart: always
