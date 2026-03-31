@@ -61,7 +61,7 @@ class RouteInfoForm(FlaskForm):
     tariff_tables = FieldList(
         FormField(TariffTableEntryForm),
         min_entries=1,
-        max_entries=15,  # <-- Максимальное количество 15 таблиц
+        max_entries=10,  # <-- Максимальное количество 10 таблиц
         label="Тарифные Таблицы (TabN)",
     )
 

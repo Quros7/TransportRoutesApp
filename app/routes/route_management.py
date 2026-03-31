@@ -755,8 +755,8 @@ def import_route():
                 for idx, tl in enumerate(tab_lines, start=1):
                     parts = tl.split(";")
                     tab_no = int(parts[0])
-                    raw_ss_string = parts[2]
-                    ss_list = [c.strip() for c in raw_ss_string.split(";") if c.strip()]
+                    raw_ss_string = ";".join(parts[2:])
+                    ss_list = [c.strip() for c in parts[2:] if c.strip()]
 
                     new_route.tariff_tables.append({
                         "tab_number": tab_no,
@@ -787,7 +787,7 @@ def import_route():
                         
                         if row_idx < zones_count and col_idx < zones_count:
                             matrix[row_idx][col_idx] = cell_data
-                            matrix[col_idx][row_idx] = cell_data
+                            # matrix[col_idx][row_idx] = cell_data # Если матрица симметрична, раскомментируй эту строку для заполнения симметричной ячейки
                     except (ValueError, IndexError):
                         continue
 

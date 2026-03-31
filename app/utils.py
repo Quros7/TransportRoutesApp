@@ -32,7 +32,7 @@ def write_route_body_to_buffer(buffer, route, decimal_places_for_config):
     route_id_str = str(route.route_number)[:6]
     trans_type = route.transport_type.replace("0x", "")
     zones_count = len(route.stops)
-    route_name = route.route_name[:30]
+    route_name = route.route_name[:100] # длина названия маршрута ограничена 100 символами
     tabs_count = len(route.tariff_tables)
 
     r_line = f"R;{route_id_str};{trans_type};{zones_count};{route_name};{tabs_count}"
@@ -44,7 +44,7 @@ def write_route_body_to_buffer(buffer, route, decimal_places_for_config):
     for i, stop in enumerate(route.stops):
         zone_no = str(i)
         km_val = stop["km"]
-        zone_name = stop["name"][:19]
+        zone_name = stop["name"][:100] # длина названия остановки ограничена 100 символами
         s_line = f"{zone_no};{km_val};{zone_name}"
         write_line(s_line)
 
