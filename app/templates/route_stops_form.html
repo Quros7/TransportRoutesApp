@@ -30,11 +30,11 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h5 class="card-title mb-0">Остановка {{ loop.index0 }}</h5>
-                            {% if route.transport_type != '0x02' %}
-                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addStopAfter(this)">
-                                    <i class="fas fa-plus"></i> Вставить после
-                                </button>
-                            {% endif %}
+                            {# {% if route.transport_type != '0x02' %} #}
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addStopAfter(this)">
+                                <i class="fas fa-plus"></i> Вставить после
+                            </button>
+                            {# {% endif %} #}
                         </div>
                         
                         <div class="row">
@@ -66,20 +66,20 @@
         
         {# ЛОГИКА ДЛЯ ГОРОДСКОГО АВТОБУСА (0x02) #}
         {# Городской маршрут состоит только из одной зоны (0), добавлять другие нельзя #}
-        {% if route.transport_type == '0x02' %}
-            <div class="alert alert-primary">
-                <i class="fas fa-info-circle"></i> 
-                Для городского маршрута (Тип 02) предусмотрена только одна тарифная зона (Зона 0). 
-                Добавление дополнительных остановок заблокировано.
-            </div>
-        {% else %}
+        {# {% if route.transport_type == '0x02' %}#}
+        {#    <div class="alert alert-primary">#}
+        {#        <i class="fas fa-info-circle"></i> #}
+        {#        Для городского маршрута (Тип 02) предусмотрена только одна тарифная зона (Зона 0). #}
+        {#        Добавление дополнительных остановок заблокировано.#}
+        {#    </div>#}
+        {#{% else %}#}
             {# Для остальных типов разрешаем добавлять остановки #}
-            <button type="button" 
-                    class="btn btn-secondary mb-4" 
-                    onclick="addStopEntry()">
-                Добавить остановку
-            </button>
-        {% endif %}
+        <button type="button" 
+                class="btn btn-secondary mb-4" 
+                onclick="addStopEntry()">
+            Добавить остановку
+        </button>
+        {#{% endif %}#}
         
         {# Кнопки Назад и Сохранить #}
         <div class="mt-4 d-flex justify-content-between">

@@ -187,11 +187,14 @@ class RouteStopsModel(BaseModel):
         transport_type = info.data.get("transport_type", "0x02")
         is_city_route = transport_type == "0x02"
 
-        if not is_city_route and len(v) < 2:
-            raise ValueError("Маршрут должен содержать минимум 2 остановки (начальную и конечную).")
+        # if not is_city_route and len(v) < 2:
+        #     raise ValueError("Маршрут должен содержать минимум 2 остановки (начальную и конечную).")
 
         # if is_city_route and len(v) > 1:
             # raise ValueError("Городской маршрут может содержать только одну зону (Остановка 0).")
+        
+        if len(v) < 1:
+            raise ValueError("Маршрут должен содержать хотя бы одну остановку.")
 
         previous_km = Decimal("-1.0")
 

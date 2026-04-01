@@ -237,16 +237,20 @@ class RouteStopsForm(FlaskForm):
         # 1. Проверяем минимальное количество остановок
         # Если маршрут НЕ городской (0x02), требуем минимум 2 остановки.
         # Если городской (0x02), достаточно 1 (Остановка 0).
-        is_city_route = self.route and self.route.transport_type == "0x02"
+        # is_city_route = self.route and self.route.transport_type == "0x02"
 
-        if not is_city_route and len(field.entries) < 2:
-            route_transport_type = TRANSPORT_TYPE_CHOICES.get(self.route.transport_type, self.route.transport_type)
-            raise ValidationError(f"Маршрут с типом транспортного средства {route_transport_type} должен содержать минимум 2 остановки (начальную и конечную).")
+        # if not is_city_route and len(field.entries) < 2:
+        #     route_transport_type = TRANSPORT_TYPE_CHOICES.get(self.route.transport_type, self.route.transport_type)
+        #     raise ValidationError(f"Маршрут с типом транспортного средства {route_transport_type} должен содержать минимум 2 остановки (начальную и конечную).")
 
         # Если маршрут городской (0x02), и остановок больше 1, это ошибка,
         # но мы контролируем это на фронтенде и JS. На всякий случай:
-        if is_city_route and len(field.entries) > 1:
-            raise ValidationError("Городской маршрут может содержать только одну зону (Остановка 0).")
+        # if is_city_route and len(field.entries) > 1:
+        #     raise ValidationError("Городской маршрут может содержать только одну зону (Остановка 0).")
+
+        # Новая общая проверка
+        if len(field.entries) < 1:
+            raise ValidationError("Необходимо добавить хотя бы одну остановку.")
 
         previous_km = Decimal("-1.0")  # Начинаем с отрицательного числа для первой проверки
 
