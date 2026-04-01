@@ -26,9 +26,9 @@
                         {% set is_city_route = route.transport_type == '0x02' %}
                         {% for stop in route.stops %}
                             {# Разрешаем отображение заголовка для Остановки 0 (индекс 0), если это городской маршрут. #}
-                            {% if loop.index > 0 or is_city_route %} 
-                                <th class="text-center">{{ stop.name }} ({{ loop.index0 }})</th>
-                            {% endif %}
+                            {# {% if loop.index > 0 or is_city_route %} #}
+                            <th class="text-center">{{ stop.name }} ({{ loop.index0 }})</th>
+                            {# {% endif %} #}
                         {% endfor %}
                     </tr>
                 </thead>
@@ -39,58 +39,64 @@
                         {% set i = loop.index0 %}
                         
                         {# Разрешаем отображение строки, если маршрут городской (0x02), даже если это последняя (и единственная) остановка. #}
-                        {% set is_city_route = route.transport_type == '0x02' %}
-                        {% if not loop.last or (is_city_route and loop.last) %}
-                            <tr>
-                                <th scope="row" class="table-light">От: {{ start_stop.name }} ({{ loop.index0 }})</th>
+                        {# {% set is_city_route = route.transport_type == '0x02' %} #}
+                        {# {% if not loop.last or (is_city_route and loop.last) %} #}
+                        <tr>
+                            <th scope="row" class="table-light">От: {{ start_stop.name }} ({{ i }})</th>
+                            
+                            {# j - Индекс конечной остановки (столбец) #}
+                            {% for end_stop in route.stops %}
+                                {# {% set i = loop.parent.index0 %} #}
+                                {% set j = loop.index0 %}
                                 
-                                {# j - Индекс конечной остановки (столбец) #}
-                                {% for end_stop in route.stops %}
-                                    {# {% set i = loop.parent.index0 %} #}
-                                    {% set j = loop.index0 %}
-                                    
-                                    {# Проверка условий отображения ячейки #}
-                                    {% set allow_input = (j > i) or (is_city_route and i == j) %}
+                                {# Проверка условий отображения ячейки #}
+                                {# {% set allow_input = (j > i) or (is_city_route and i == j) %} #}
+                                {# {% set allow_input = (j >= i) %} #}
 
-                                    {% if allow_input %}
-                                        {# Ячейка для заполнения #}
-                                        <td data-start-index="{{ i }}" data-end-index="{{ j }}">
-                                            {% for tariff_table in route.tariff_tables %}
-                                                {% set tariff_id = tariff_table.tab_number %} {# Используем TabN как ID (1, 2, 3...) #}
-                                                
-                                                <div class="tariff-input-group mb-1">
-                                                    <label class="small text-muted mb-0">
-                                                        {{ tariff_table.tariff_name }}:
-                                                    </label>
-                                                    <input 
-                                                        type="text" 
-                                                        step="0.01" 
-                                                        min="0"
-                                                        class="form-control form-control-sm price-input"
-                                                        data-tariff-id="{{ tariff_id }}"
-                                                        
-                                                        {# Загрузка существующих данных #}
-                                                        {# Проверяем, существует ли цена в матрице (matrix[i][j]) #}
-                                                        {% set prices = route.price_matrix[i][j] if route.price_matrix and route.price_matrix[i] is defined and route.price_matrix[i][j] is defined else {} %}
-                                                        value="{{ prices[tariff_id|string] if tariff_id|string in prices else '' }}"
-                                                        
-                                                        placeholder="Цена"
-                                                    >
-                                                </div>
-                                            {% endfor %}
-                                        </td>
-                                    {% else %}
-                                        {# Ячейка не требуется (j <= i) #}
-                                        <td class="bg-light" data-start-index="{{ i }}" data-end-index="{{ j }}">
-                                            {# 💥 Для диагонали (i==j) не-городских маршрутов можно добавить пометку #}
-                                            {% if i == j and not is_city_route %}
-                                                <span class="text-muted small">Внутризоновая</span>
-                                            {% endif %}
-                                        </td>
-                                    {% endif %}
-                                {% endfor %}
-                            </tr>
-                        {% endif %}
+                                {% if j >= i %}
+                                    {# Ячейка для заполнения #}
+                                    <td data-start-index="{{ i }}" data-end-index="{{ j }}">
+                                        {% for tariff_table in route.tariff_tables %}
+                                            {% set tariff_id = tariff_table.tab_number %} {# Используем TabN как ID (1, 2, 3...) #}
+                                            
+                                            <div class="tariff-input-group mb-1">
+                                                <label class="small text-muted mb-0">
+                                                    {{ tariff_table.tariff_name }}:
+                                                </label>
+                                                {# 1. Безопасно достаем строку матрицы #}
+                                                {% set row = route.price_matrix[i] if route.price_matrix and route.price_matrix is iterable and route.price_matrix[i] is defined else none %}
+
+                                                {# 2. Безопасно достаем ячейку (цены тарифов) #}
+                                                {% set prices = row[j] if row and row[j] is defined and row[j] is mapping else {} %}
+                                                <input 
+                                                    type="text" 
+                                                    step="0.01" 
+                                                    min="0"
+                                                    class="form-control form-control-sm price-input"
+                                                    data-tariff-id="{{ tariff_id }}"
+                                                    
+                                                    {# Загрузка существующих данных #}
+                                                    {# Проверяем, существует ли цена в матрице (matrix[i][j]) #}
+                                                    {# {% set prices = route.price_matrix[i][j] if route.price_matrix and route.price_matrix[i] is defined and route.price_matrix[i][j] is defined else {} %} #}
+                                                    value="{{ prices[tariff_id|string] if tariff_id|string in prices else '' }}"
+                                                    
+                                                    placeholder="Цена"
+                                                >
+                                            </div>
+                                        {% endfor %}
+                                    </td>
+                                {% else %}
+                                    {# Ячейка не требуется (j <= i) #}
+                                    <td class="bg-light" data-start-index="{{ i }}" data-end-index="{{ j }}">
+                                        {# Для диагонали (i==j) не-городских маршрутов можно добавить пометку #}
+                                        {# {% if i == j and not is_city_route %} #}
+                                        {#     <span class="text-muted small">Внутризоновая</span> #}
+                                        {# {% endif %} #}
+                                    </td>
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                        {# {% endif %} #}
                     {% endfor %}
                 </tbody>
             </table>

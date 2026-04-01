@@ -177,12 +177,6 @@ class RouteInfoModel(BaseModel):
 
 
 class RouteStopsModel(BaseModel):
-    # transport_type must come before stops so that the validator for stops
-    # can read the correct value from info.data. If transport_type is declared
-    # after stops, info.data in the field_validator may not yet include it and
-    # the default of "0x02" (city) will be used, causing every route to be
-    # treated as city during validation. We originally observed this bug when
-    # intercity routes (0x40) were incorrectly rejected as "городской".
     transport_type: str  # Need this for validation
     stops: list[StopModel] = Field(..., min_length=1, max_length=100)
 
@@ -196,8 +190,8 @@ class RouteStopsModel(BaseModel):
         if not is_city_route and len(v) < 2:
             raise ValueError("Маршрут должен содержать минимум 2 остановки (начальную и конечную).")
 
-        if is_city_route and len(v) > 1:
-            raise ValueError("Городской маршрут может содержать только одну зону (Остановка 0).")
+        # if is_city_route and len(v) > 1:
+            # raise ValueError("Городской маршрут может содержать только одну зону (Остановка 0).")
 
         previous_km = Decimal("-1.0")
 

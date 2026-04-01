@@ -80,6 +80,7 @@ body {
 .price-matrix {
     border-collapse: separate; /* Важно для корректной работы sticky border */
     border-spacing: 0;
+    margin-bottom: 1px;
 }
 
 /* 2. Закрепляем верхнюю строку (Шапка) */
