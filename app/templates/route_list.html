@@ -76,6 +76,7 @@
                             </th>
                             <th scope="col">№</th>
                             <th scope="col">Название маршрута</th>
+                            <th scope="col">Номер маршрута</th>
                             <th scope="col">Перевозчик (ID)</th>
                             <th scope="col">Тип транспорта</th>
                             <th scope="col">Остановки</th>
@@ -95,6 +96,7 @@
                                 <td>
                                     <strong>{{ route.route_name }}</strong>
                                 </td>
+                                <td>{{ route.route_number }}</td>
                                 <td>{{ route.carrier_id }}</td>
                                 <td>
                                     {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
