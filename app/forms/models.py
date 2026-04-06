@@ -55,7 +55,7 @@ class RegistrationModel(BaseModel):
 class TariffTableEntryModel(BaseModel):
     tariff_name: str = Field(..., min_length=1, max_length=50)
     table_type_code: str = Field(..., min_length=1, max_length=2)
-    ss_series_codes: str = Field(..., min_length=1)
+    ss_series_codes: str = Field(default="")
 
     @field_validator("table_type_code")
     @classmethod
@@ -76,8 +76,9 @@ class TariffTableEntryModel(BaseModel):
     @field_validator("ss_series_codes")
     @classmethod
     def validate_ss_series_codes(cls, v):
-        if not v.strip():
-            raise ValueError('Введите коды серий SS через ";".')
+        # Если пусто - разрешаем (валидацию "пустоты" сделаем в RouteInfoModel)
+        if not v or not v.strip():
+            return ""
         
         pattern = r"^(\d{2})(;(\d{2}))*$"
         if not re.match(pattern, v):
@@ -165,13 +166,16 @@ class RouteInfoModel(BaseModel):
                     raise ValueError(f'ID:{i}:table_type_code:Таблица 1 (основная) должна иметь код "02".')
             else:
                 if entry.table_type_code not in ["P", "T", "F"]:
-                    raise ValueError(f'ID:{i}:table_type_code:Для таблицы {i+1} допустимы только "P", "T" или "F".')
+                    raise ValueError(f'ID:{i}:table_type_code:Выберите тип "P", "T" или "F".')
+                # Для таблиц > 1 серии SS ОБЯЗАТЕЛЬНЫ
+                if not entry.ss_series_codes or not entry.ss_series_codes.strip():
+                    raise ValueError(f'ID:{i}:ss_series_codes:Для этой таблицы необходимо указать серии SS.')
 
             # 2. Проверка уникальности серий SS
             ss_codes = [c.strip() for c in entry.ss_series_codes.split(";") if c.strip()]
             for code in ss_codes:
                 if code in all_ss_codes:
-                    raise ValueError(f'ID:{i}:ss_series_codes:Серия SS "{code}" уже есть в другой таблице.')
+                    raise ValueError(f'ID:{i}:ss_series_codes:Серия SS "{code}" уже используется в другой таблице.')
                 all_ss_codes.add(code)
         return v
 

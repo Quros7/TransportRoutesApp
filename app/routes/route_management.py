@@ -13,6 +13,7 @@ from flask_wtf.csrf import generate_csrf
 from app import db
 from app.audit import log_action, serialize_route
 from app.forms import BulkGenerateForm, ImportRouteForm, RouteInfoForm, RoutePricesForm, RouteStopsForm
+from app.forms.models import RouteInfoModel
 from app.models import Route
 from app.utils import write_route_body_to_buffer
 
@@ -110,9 +111,16 @@ def create_or_edit_route_info(route_id):
         tariff_tables_data = []
         for i, t in enumerate(form.tariff_tables.entries):
             # 1. Получаем строку, которую ввел пользователь
-            raw_ss_codes_string = t.form.ss_series_codes.data
+            #   raw_ss_codes_string = t.form.ss_series_codes.data
+            # Если поле пустое (для Таблицы 1), используем пустую строку
+            raw_ss_codes_string = t.form.ss_series_codes.data or ""
             # 2. Парсим строку серий SS
+            #   ss_codes_list = [c.strip() for c in raw_ss_codes_string.split(";") if c.strip()]
+            # Безопасный сплит: сработает даже на пустой строке
             ss_codes_list = [c.strip() for c in raw_ss_codes_string.split(";") if c.strip()]
+
+            # Принудительная логика типов
+            type_code = "02" if i == 0 else t.form.table_type_code.data
 
             table_entry = {
                 # Номер таблицы (TabN)
@@ -120,7 +128,7 @@ def create_or_edit_route_info(route_id):
                 # Название тарифа (для Шага 3 и отображения)
                 "tariff_name": t.form.tariff_name.data,
                 # Тип таблицы (Стартовый код: '02', 'P', 'T', 'F')
-                "table_type_code": t.form.table_type_code.data,
+                "table_type_code": type_code,
                 # Коды серий SS (список значений, без стартового кода)
                 "ss_series_codes": raw_ss_codes_string,
                 # Сохраняем распарсенный список под другим именем (опционально, но полезно).
@@ -717,6 +725,8 @@ def import_route():
 
                 # --- ПАРСИНГ СТРОКИ R ---
                 r_line = route_block[0].split(";")
+                if len(r_line) < 6:
+                        continue
                 r_number = r_line[1]
                 r_name = r_line[4].strip()
                 zones_count = int(r_line[3])
@@ -750,20 +760,25 @@ def import_route():
                 # --- ТАРИФНЫЕ ТАБЛИЦЫ ---
                 tabs_start = 1 + zones_count
                 tab_lines = route_block[tabs_start : tabs_start + tabs_count]
+
+                tariff_tables_list = []
                 tab_ids = []
 
                 for idx, tl in enumerate(tab_lines, start=1):
                     parts = tl.split(";")
+                    if len(parts) < 2:
+                            continue
                     tab_no = int(parts[0])
                     raw_ss_string = ";".join(parts[2:])
                     ss_list = [c.strip() for c in parts[2:] if c.strip()]
+                    raw_ss_string = ";".join(ss_list)
 
                     new_route.tariff_tables.append({
                         "tab_number": tab_no,
                         "tariff_name": f"Тариф {idx}",
                         "table_type_code": parts[1],
                         "ss_series_codes": raw_ss_string,
-                        "parsed_ss_codes_list": ss_list,
+                        # "parsed_ss_codes_list": ss_list,
                     })
                     tab_ids.append(str(tab_no))
 
@@ -793,8 +808,33 @@ def import_route():
 
                 new_route.price_matrix = matrix
 
+                # ПРОВЕРКА ЧЕРЕЗ PYDANTIC ПЕРЕД СОХРАНЕНИЕМ
+                # Это гарантирует, что мы не импортируем маршрут, который потом "сломает" форму редактирования.
+                try:
+                    # Собираем данные для проверки
+                    check_data = {
+                        "region_code": region_code,
+                        "carrier_id": carrier_id,
+                        "unit_id": unit_id,
+                        "decimal_places": str(dec_places),
+                        "route_name": r_name,
+                        "route_number": r_number,
+                        "transport_type": new_route.transport_type,
+                        "tariff_tables": new_route.tariff_tables
+                    }
+                    validated_data = RouteInfoModel(**check_data) # Проверка правил (SS для 2+, тип 02 и т.д.)
+                    # Если валидация прошла, обновляем данные (zfill и т.д.) из модели
+                    region_code = validated_data.region_code
+                    carrier_id = validated_data.carrier_id
+                    unit_id = validated_data.unit_id
+                    r_number = validated_data.route_number
+                
+                except Exception as e:
+                    # Если файл "кривой", пропускаем этот маршрут
+                    flash(f"Маршрут {r_name} пропущен: ошибка валидации.", "warning")
+                    continue
+
                 db.session.add(new_route)
-                imported_count += 1
                 
                 # Логируем каждый маршрут отдельно
                 db.session.flush() # Получаем ID
@@ -804,6 +844,7 @@ def import_route():
                     route_id=new_route.id,
                     details={"route_name": r_name, "route_number": r_number},
                 )
+                imported_count += 1
 
             db.session.commit()
             flash(f"Успешно импортировано маршрутов: {imported_count}", "success")
@@ -812,7 +853,7 @@ def import_route():
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Import error: {str(e)}")
-            flash(f"Ошибка импорта: {str(e)}", "danger")
+            flash(f"Ошибка импорта: {str(e)}. Критическая ошибка при разборе блока {i+1}", "danger")
             return redirect(request.url)
 
     return render_template("import_route.html", form=form)

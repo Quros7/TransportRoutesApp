@@ -53,8 +53,19 @@ def write_route_body_to_buffer(buffer, route, decimal_places_for_config):
     # ==========================================
     for table in route.tariff_tables:
         tab_n = table["tab_number"]
-        ss_codes = table["ss_series_codes"]
-        t_line = f"{tab_n};{table['table_type_code']};{ss_codes}"
+        type_code = table['table_type_code']
+        # ss_codes = table["ss_series_codes"]
+        ss_codes = table.get("ss_series_codes", "")
+
+        if ss_codes:
+            # Убеждаемся, что нет двойных ;; и пустых элементов
+            clean_ss = ";".join([c.strip() for c in ss_codes.split(";") if c.strip()])
+            t_line = f"{tab_n};{type_code};{clean_ss}"
+        else:
+            # Если SS нет (для Таблицы 1), пишем только номер и тип
+            t_line = f"{tab_n};{type_code}"
+
+        # t_line = f"{tab_n};{table['table_type_code']};{ss_codes}"
         write_line(t_line)
 
     # ==========================================

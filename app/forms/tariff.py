@@ -20,8 +20,8 @@ class TariffTableEntryForm(FlaskForm):
     # 3. Серии SS (список кодов)
     # Включает валидацию, что это список чисел, разделенных ';'.
     ss_series_codes = StringField(
-        'Коды серий SS (через ";"). (В конце ";" ставить не нужно!)',
-        validators=[DataRequired()],
+        'Коды серий SS (без пробелов, через ";"). (В конце ";" ставить не нужно!)',
+        validators=[],
     )
 
     def validate(self, extra_validators=None):

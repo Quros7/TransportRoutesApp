@@ -55,7 +55,7 @@
 
         <h3>3. Тарифные Таблицы (Строки Tabs)</h3>
         <p class="text-muted small">
-            Каждая таблица соответствует одной строке в блоке Tabs. Максимум 15 таблиц. <br>
+            Каждая таблица соответствует одной строке в блоке Tabs. Максимум 10 таблиц. <br>
             <b>Таблица 1:</b> Код должен быть <b>02</b>, содержит все серии SU и EP. <br>
             <b>Остальные таблицы:</b> Код <b>P</b>, <b>T</b> или <b>F</b>, содержат серии проездных.
         </p>
@@ -82,7 +82,7 @@
                     <div class="card-body">
                         <h5 class="card-title">Таблица {{ loop.index }}</h5> 
                         
-                        {# ИЗМЕНЕНИЕ: ОБНОВЛЕННЫЕ ПОЛЯ В СООТВЕТСТВИИ С TariffTableEntryForm #}
+                        {# ПОЛЯ В СООТВЕТСТВИИ С TariffTableEntryForm #}
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 {{ entry_form.form.tariff_name.label(class="form-label") }}
@@ -91,7 +91,15 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 {{ entry_form.form.table_type_code.label(class="form-label") }}
-                                {{ entry_form.form.table_type_code(class="form-control table-type-code", placeholder="02, P, T или F") }}
+                                {% if loop.index0 == 0 %}
+                                    {# Для первой таблицы оставляем текстовое поле, оно будет заблокировано через JS/атрибут #}
+                                    {{ entry_form.form.table_type_code(class="form-control table-type-code", readonly=True, value="02") }}
+                                {% else %}
+                                    {# Для остальных таблиц используем select #}
+                                    {# Если в форме это SelectField, WTForms сам отрендерит options. #}
+                                    {# Если это StringField, добавим атрибут class для превращения в select на стороне клиента или просто выведем как есть. #}
+                                    {{ entry_form.form.table_type_code(class="form-select table-type-code") }}
+                                {% endif %}
                                 {% for error in entry_form.form.table_type_code.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
                             </div>
                         </div>
@@ -148,12 +156,17 @@
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Тип/Код Таблицы (02/P/T/F)</label>
-                        <input type="text" name="tariff_tables-NEW_INDEX-table_type_code" class="form-control table-type-code" placeholder="02, P, T или F" required>
+                        <select name="tariff_tables-NEW_INDEX-table_type_code" class="form-select table-type-code" required>
+                            <option value="" disabled selected>Выберите тип...</option>
+                            <option value="P">P</option>
+                            <option value="T">T</option>
+                            <option value="F">F</option>
+                        </select>
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Коды серий SS (через ";"). (В конце ";" ставить не нужно!)</label>
+                    <label class="form-label">Коды серий SS (без пробелов, через ";"). (В конце ";" ставить не нужно!)</label>
                     <input type="text" name="tariff_tables-NEW_INDEX-ss_series_codes" class="form-control ss-codes-input" placeholder="Например: 28 или 15;20;58" required>
                 </div>
                 
@@ -172,9 +185,9 @@
         const container = document.getElementById('tariff-tables-container');
         const count = container.querySelectorAll('.tariff-table-entry').length;
         
-        // Проверка лимита в 15 таблиц
-        if (count >= 15) {
-            alert("Достигнут максимальный лимит: 15 тарифных таблиц.");
+        // Проверка лимита в 10 таблиц
+        if (count >= 10) {
+            alert("Достигнут максимальный лимит: 10 тарифных таблиц.");
             return;
         }
 
@@ -239,18 +252,20 @@
             if (index === 0) {
                 // Таблица 1: Код должен быть "02", кнопка удаления скрыта
                 if (typeCodeInput) {
-                    typeCodeInput.value = '02'; // Устанавливаем "02"
-                    typeCodeInput.setAttribute('readonly', true);
+                    // typeCodeInput.value = '02'; // Устанавливаем "02"
+                    // typeCodeInput.setAttribute('readonly', true);
+                    typeCodeField.value = '02';
+                    typeCodeField.readOnly = true;
                 }
                 if (removeButton) removeButton.style.display = 'none';
             } else {
                 // Остальные таблицы: Можно редактировать и удалять
-                if (typeCodeInput) {
-                    typeCodeInput.removeAttribute('readonly');
-                    // Сбрасываем "02", если поле было скопировано из первой таблицы
-                    if (typeCodeInput.value === '02') typeCodeInput.value = ''; 
-                }
-                if (removeButton) removeButton.style.display = 'inline-block'; 
+                    if (removeButton) removeButton.style.display = 'inline-block';
+                    // Если поле было readonly (от первой таблицы), разрешаем редактирование
+                    if (typeCodeField && typeCodeField.tagName === 'INPUT' && typeCodeField.readOnly) {
+                        typeCodeField.readOnly = false;
+                        if (typeCodeField.value === '02') typeCodeField.value = '';
+                    }
             }
         });
     }
