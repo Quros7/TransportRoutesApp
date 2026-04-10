@@ -1,0 +1,7 @@
+<!doctype html>
+        <title>Test Excel Import</title>
+        <h1>Загрузи XLS для теста парсера</h1>
+        <form action="{{ url_for('route_management.import_excel_route') }}" method="POST" enctype="multipart/form-data">
+            <input type="file" name="file">
+            <button type="submit">Загрузить</button>
+        </form>

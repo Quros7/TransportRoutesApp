@@ -47,7 +47,8 @@ class RouteInfoForm(FlaskForm):
                 message="Используйте только цифры, буквы, тире или дробь"
             )
         ],
-        filters=[lambda x: x.zfill(6) if x else x],
+        filters=[lambda x: x]
+        # filters=[lambda x: x.zfill(6) if x else x],
         # filters=[lambda x: x.zfill(6) if (x and x.isdigit()) else x],
     )
 

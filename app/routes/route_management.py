@@ -6,7 +6,7 @@ from datetime import datetime
 from urllib.parse import parse_qs
 
 import sqlalchemy as sa
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for, jsonify
 from flask_login import current_user, login_required
 from flask_wtf.csrf import generate_csrf
 
@@ -16,6 +16,9 @@ from app.forms import BulkGenerateForm, ImportRouteForm, RouteInfoForm, RoutePri
 from app.forms.models import RouteInfoModel
 from app.models import Route
 from app.utils import write_route_body_to_buffer
+
+from app.services.importers.excel_importer import ExcelRouteImporter
+from app.services.importers.trfz_importer import TRFZRouteImporter
 
 bp = Blueprint("route_management", __name__)
 
@@ -680,180 +683,157 @@ def generate_bulk_config():
         return redirect(url_for("route_management.route_list"))
 
 
-# Импорт маршрута
+# Импорт маршрута (Полная версия: TRFZ + Excel)
 @bp.route("/route/import", methods=["GET", "POST"])
 @login_required
 def import_route():
     form = ImportRouteForm()
     if form.validate_on_submit():
         file = form.route_file.data
+        filename = file.filename.lower()
+        raw_data = file.read()
+        
         try:
-            raw_data = file.read()
-            try:
-                content = raw_data.decode("utf-8")
-            except UnicodeDecodeError:
-                content = raw_data.decode("cp866", errors="replace")
-
-            lines = [line.strip() for line in content.splitlines() if line.strip()]
-
-            if len(lines) < 2:
-                flash("Файл слишком короткий или поврежден", "danger")
-                return redirect(request.url)
-
-            # --- 1. ПАРСИНГ ОБЩЕЙ ШАПКИ ---
-            header = lines[0].split(";")
-            region_code = header[0]
-            carrier_id = header[1]
-            unit_id = header[2]
-            dec_places = int(header[4])
-            multiplier = 10**dec_places
-
-            # Находим индексы всех строк, начинающихся с R;
-            route_indices = [i for i, line in enumerate(lines) if line.startswith("R;")]
-            
-            if not route_indices:
-                flash("В файле не найдено ни одного маршрута (строки R;)", "warning")
-                return redirect(request.url)
+            # Диспетчер импорта
+            if filename.endswith(('.xlsx', '.xls')):
+                importer = ExcelRouteImporter(raw_data)
+                # Excel возвращает 1 маршрут (словарь)
+                routes_to_process = [importer.get_formatted_route_data()]
+            else:
+                importer = TRFZRouteImporter(raw_data)
+                # TRFZ возвращает список маршрутов
+                routes_to_process = importer.get_routes_data()
 
             imported_count = 0
-
-            # --- 2. ЦИКЛ ПО ВСЕМ МАРШРУТАМ В ФАЙЛЕ ---
-            for i, start_idx in enumerate(route_indices):
-                # Определяем, где заканчивается текущий маршрут (до следующей R или до конца файла)
-                end_idx = route_indices[i+1] if i + 1 < len(route_indices) else len(lines)
-                route_block = lines[start_idx:end_idx]
-
-                # --- ПАРСИНГ СТРОКИ R ---
-                r_line = route_block[0].split(";")
-                if len(r_line) < 6:
-                        continue
-                r_number = r_line[1]
-                r_name = r_line[4].strip()
-                zones_count = int(r_line[3])
-                tabs_count = int(r_line[5])
-
-                # Инициализация маршрута
-                new_route = Route(
-                    user_id=current_user.id,
-                    route_name=r_name,
-                    route_number=r_number,
-                    region_code=region_code,
-                    carrier_id=carrier_id,
-                    unit_id=unit_id,
-                    transport_type=f"0x{r_line[2]}" if not r_line[2].startswith("0x") else r_line[2],
-                    decimal_places=dec_places,
-                    stops=[],
-                    tariff_tables=[],
-                    price_matrix=[],
-                    stops_set=True,
-                    is_completed=True,
-                )
-
-                # --- ОСТАНОВКИ ---
-                # Остановки идут сразу за строкой R
-                stop_lines = route_block[1 : 1 + zones_count]
-                for sl in stop_lines:
-                    parts = sl.split(";")
-                    if len(parts) >= 3:
-                        new_route.stops.append({"name": parts[2], "km": parts[1]})
-
-                # --- ТАРИФНЫЕ ТАБЛИЦЫ ---
-                tabs_start = 1 + zones_count
-                tab_lines = route_block[tabs_start : tabs_start + tabs_count]
-
-                tariff_tables_list = []
-                tab_ids = []
-
-                for idx, tl in enumerate(tab_lines, start=1):
-                    parts = tl.split(";")
-                    if len(parts) < 2:
-                            continue
-                    tab_no = int(parts[0])
-                    raw_ss_string = ";".join(parts[2:])
-                    ss_list = [c.strip() for c in parts[2:] if c.strip()]
-                    raw_ss_string = ";".join(ss_list)
-
-                    new_route.tariff_tables.append({
-                        "tab_number": tab_no,
-                        "tariff_name": f"Тариф {idx}",
-                        "table_type_code": parts[1],
-                        "ss_series_codes": raw_ss_string,
-                        # "parsed_ss_codes_list": ss_list,
-                    })
-                    tab_ids.append(str(tab_no))
-
-                # --- МАТРИЦА ЦЕН ---
-                matrix = [[{} for _ in range(zones_count)] for _ in range(zones_count)]
-                price_lines = route_block[tabs_start + tabs_count :]
-
-                for ml in price_lines:
-                    parts = ml.split(";")
-                    if len(parts) < 3:
-                        continue
-                    
-                    try:
-                        row_idx, col_idx = int(parts[0]), int(parts[1])
-                        prices = parts[2:]
-                        cell_data = {}
-                        for p_idx, p_val in enumerate(prices):
-                            if p_idx < len(tab_ids):
-                                t_id = tab_ids[p_idx]
-                                cell_data[t_id] = float(p_val) / multiplier
-                        
-                        if row_idx < zones_count and col_idx < zones_count:
-                            matrix[row_idx][col_idx] = cell_data
-                            # matrix[col_idx][row_idx] = cell_data # Если матрица симметрична, раскомментируй эту строку для заполнения симметричной ячейки
-                    except (ValueError, IndexError):
-                        continue
-
-                new_route.price_matrix = matrix
-
-                # ПРОВЕРКА ЧЕРЕЗ PYDANTIC ПЕРЕД СОХРАНЕНИЕМ
-                # Это гарантирует, что мы не импортируем маршрут, который потом "сломает" форму редактирования.
+            for data in routes_to_process:
                 try:
-                    # Собираем данные для проверки
-                    check_data = {
-                        "region_code": region_code,
-                        "carrier_id": carrier_id,
-                        "unit_id": unit_id,
-                        "decimal_places": str(dec_places),
-                        "route_name": r_name,
-                        "route_number": r_number,
-                        "transport_type": new_route.transport_type,
-                        "tariff_tables": new_route.tariff_tables
+                    # Валидация через Pydantic (общая для всех)
+                    check_payload = {
+                        **data["common"], # region_code, carrier_id и т.д.
+                        **data["route_info"],
+                        "tariff_tables": data["tariff_tables"]
                     }
-                    validated_data = RouteInfoModel(**check_data) # Проверка правил (SS для 2+, тип 02 и т.д.)
-                    # Если валидация прошла, обновляем данные (zfill и т.д.) из модели
-                    region_code = validated_data.region_code
-                    carrier_id = validated_data.carrier_id
-                    unit_id = validated_data.unit_id
-                    r_number = validated_data.route_number
-                
+                    valid = RouteInfoModel(**check_payload)
+
+                    new_route = Route(
+                        user_id=current_user.id,
+                        route_name=valid.route_name,
+                        route_number=valid.route_number,
+                        region_code=valid.region_code,
+                        carrier_id=valid.carrier_id,
+                        unit_id=valid.unit_id,
+                        transport_type=valid.transport_type,
+                        decimal_places=int(valid.decimal_places),
+                        stops=data["stops"],
+                        tariff_tables=data["tariff_tables"],
+                        price_matrix=data["price_matrix"],
+                        stops_set=True,
+                        is_completed=True
+                    )
+                    db.session.add(new_route)
+                    db.session.flush()
+                    
+                    log_action(action="route_imported", entity_type="route", 
+                               route_id=new_route.id, details={"name": valid.route_name})
+                    imported_count += 1
                 except Exception as e:
-                    # Если файл "кривой", пропускаем этот маршрут
-                    flash(f"Маршрут {r_name} пропущен: ошибка валидации.", "warning")
+                    flash(f"Ошибка в одном из маршрутов: {str(e)}", "warning")
                     continue
 
-                db.session.add(new_route)
-                
-                # Логируем каждый маршрут отдельно
-                db.session.flush() # Получаем ID
-                log_action(
-                    action="route_imported",
-                    entity_type="route",
-                    route_id=new_route.id,
-                    details={"route_name": r_name, "route_number": r_number},
-                )
-                imported_count += 1
-
             db.session.commit()
-            flash(f"Успешно импортировано маршрутов: {imported_count}", "success")
+            flash(f"Успешно импортировано: {imported_count}", "success")
             return redirect(url_for("route_management.route_list"))
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Import error: {str(e)}")
-            flash(f"Ошибка импорта: {str(e)}. Критическая ошибка при разборе блока {i+1}", "danger")
-            return redirect(request.url)
-
+            flash(f"Критическая ошибка файла: {str(e)}", "danger")
+            
     return render_template("import_route.html", form=form)
+
+
+# # Временный тестовый маршрут
+# @bp.route("/route/import-excel", methods=["GET","POST"])
+# @login_required
+# def import_excel_route():
+#     # 1. Если просто открываем страницу
+#     if request.method == "GET":
+#         # Убедись, что этот шаблон существует, или используй общий для импорта
+#         return render_template("import_excel.html") 
+
+#     # 2. Обработка POST-запроса (загрузка файла)
+#     if "file" not in request.files:
+#         flash("Файл не найден в запросе", "danger")
+#         return redirect(request.url)
+    
+#     file = request.files["file"]
+#     if file.filename == "":
+#         flash("Файл не выбран", "danger")
+#         return redirect(request.url)
+    
+#     # ПРОВЕРКА ЧЕРЕЗ PYDANTIC
+#     try:
+#         file_contents = file.read()
+#         # Инициализируем наш новый сервис
+#         importer = ExcelRouteImporter(file_contents)
+#         data = importer.get_formatted_route_data()
+#         # Собираем payload для валидатора
+#         payload = {
+#             **data["route_info"],
+#             "tariff_tables": data["tariff_tables"]
+#         }
+#         validated_route = RouteInfoModel(**payload)
+        
+#         # 3. Создание объекта модели SQLAlchemy
+#         # Мы берем данные из validated_route (уже проверенные) и остальные части data
+#         # return jsonify({"status": "success", "data": data})
+#         new_route = Route(
+#             user_id=current_user.id,
+#             route_name=validated_route.route_name,
+#             route_number=validated_route.route_number,
+#             region_code=validated_route.region_code,
+#             carrier_id=validated_route.carrier_id,
+#             unit_id=validated_route.unit_id,
+#             transport_type=validated_route.transport_type,
+#             decimal_places=int(validated_route.decimal_places),
+
+#             # Данные из импортера
+#             stops=data["stops"],
+#             tariff_tables=data["tariff_tables"],
+#             price_matrix=data["price_matrix"],
+            
+#             # Флаги готовности
+#             stops_set=True,
+#             is_completed=True
+#         )   
+
+#         # 4. Сохранение в базу
+#         db.session.add(new_route)
+#         db.session.commit()
+        
+#         # 5. Логирование (для курсовой это важно!)
+#         log_action(
+#             action="route_excel_imported",
+#             entity_type="route",
+#             route_id=new_route.id,
+#             details={"filename": file.filename}
+#         )
+        
+#         flash(f"Маршрут '{new_route.route_name}' успешно импортирован!", "success")
+#         return redirect(url_for("route_management.route_list"))
+        
+#     except Exception as e:
+#         db.session.rollback()
+#         current_app.logger.error(f"Excel Import Error: {str(e)}")
+#         flash(f"Ошибка импорта: {str(e)}", "danger")
+#         return redirect(request.url)
+
+#     # Простая форма для загрузки, если зашли через GET
+#     return '''
+#         <!doctype html>
+#         <title>Test Excel Import</title>
+#         <h1>Загрузи XLS для теста парсера</h1>
+#         <form method=post enctype=multipart/form-data>
+#           <input type=file name=file>
+#           <input type=submit value=Upload>
+#         </form>
+#     '''

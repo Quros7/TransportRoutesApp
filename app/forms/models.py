@@ -138,7 +138,8 @@ class RouteInfoModel(BaseModel):
         if not re.match(r"^[0-9a-zA-Zа-яА-Я/\-]{1,6}$", v):
             raise ValueError("Номер маршрута должен содержать от 1 до 6 символов (цифры, буквы, / или -)")
         
-        return v.zfill(6)
+        #return v.zfill(6)
+        return v
         # return v.zfill(6) if v.isdigit() else v
 
     @field_validator("transport_type")
