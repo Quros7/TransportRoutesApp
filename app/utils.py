@@ -63,7 +63,7 @@ def write_route_body_to_buffer(buffer, route, decimal_places_for_config):
             t_line = f"{tab_n};{type_code};{clean_ss}"
         else:
             # Если SS нет (для Таблицы 1), пишем только номер и тип
-            t_line = f"{tab_n};{type_code}"
+            t_line = f"{tab_n};{type_code};"
 
         # t_line = f"{tab_n};{table['table_type_code']};{ss_codes}"
         write_line(t_line)

@@ -354,13 +354,13 @@ def edit_route_prices(route_id):
         except Exception as e:
             form_dict = f"can't read request.form: {e}"
 
-        current_app.logger.info("DEBUG INCOMING POST — request.form keys & previews: %s", form_dict)
+        #current_app.logger.info("DEBUG INCOMING POST — request.form keys & previews: %s", form_dict)
         raw_body = request.get_data(as_text=True) or ""
-        current_app.logger.info(
-            "DEBUG INCOMING POST — raw body length=%s preview=%s",
-            len(raw_body),
-            raw_body[:500],
-        )
+        # current_app.logger.info(
+        #     "DEBUG INCOMING POST — raw body length=%s preview=%s",
+        #     len(raw_body),
+        #     raw_body[:500],
+        # )
 
     # === Основная логика: валидируем форму (CSRF и пр.) ===
     if form.validate_on_submit():
@@ -728,7 +728,7 @@ def import_route():
                         tariff_tables=data["tariff_tables"],
                         price_matrix=data["price_matrix"],
                         stops_set=True,
-                        is_completed=True
+                        is_completed=False,  # Ставим False, чтобы пользователь проверил цены после импорта
                     )
                     db.session.add(new_route)
                     db.session.flush()
