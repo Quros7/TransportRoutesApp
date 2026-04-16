@@ -33,8 +33,11 @@ RUN poetry install --no-interaction --no-ansi --no-root --only main
 # Копируем остальной код проекта
 COPY . .
 
+# Делаем скрипт запуска исполняемым
+RUN chmod +x entrypoint.sh
+
 # Открываем порт
 EXPOSE 5000
 
-# Запуск через flask
-CMD ["flask", "run", "--host=0.0.0.0"]
+# Запускаем через entrypoint
+ENTRYPOINT ["./entrypoint.sh"]
