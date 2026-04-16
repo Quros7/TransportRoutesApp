@@ -520,7 +520,7 @@ def delete_route(route_id):
     return redirect(url_for("route_management.route_list"))
 
 
-# --- Генерация файла конфигурации для одного маршрута ---
+# --- Генерация файла конфигурации для одного маршрута (экспорт TRFZ) ---
 @bp.route("/route/<int:route_id>/generate_config")
 @login_required
 def generate_config(route_id):
@@ -544,6 +544,7 @@ def generate_config(route_id):
 
     try:
         current_date = datetime.now().strftime("%y%m%d")
+        current_time = datetime.now().strftime("%H%M%S")
         # ==========================================
         # 1. ЗАГОЛОВОК ФАЙЛА
         # RR;TTTT;DDDD;YYMMDD;V
@@ -570,7 +571,7 @@ def generate_config(route_id):
         buffer.seek(0)
 
         # Формируем имя файла (Код региона_ID Перевозчика_ID Подразделения_Название маршрута_Дата)
-        filename = f"{route.region_code}_{route.carrier_id}_{route.unit_id}_{route.route_name}_{current_date}"
+        filename = f"{route.region_code}_{route.carrier_id}_{route.unit_id}_TRFZ_{current_date}_{current_time}"
         log_action(
             action="route_config_generated",
             entity_type="route",
@@ -586,7 +587,7 @@ def generate_config(route_id):
         return redirect(url_for("route_management.route_list"))
 
 
-# --- Генерация файла конфигурации для нескольких маршрутов ---
+# --- Генерация файла конфигурации для нескольких маршрутов (экспорт TRFZ) ---
 @bp.route("/routes/generate_bulk_config", methods=["POST"])
 @login_required
 def generate_bulk_config():
@@ -648,6 +649,7 @@ def generate_bulk_config():
     try:
         # --- ШАПКА ФАЙЛА (Берем данные из bulk_form.data) ---
         current_date = datetime.now().strftime("%y%m%d")
+        current_time = datetime.now().strftime("%H%M%S")
 
         # ИСПОЛЬЗУЕМ ДАННЫЕ ИЗ ФОРМЫ (ОНИ УЖЕ ОТФИЛЬТРОВАНЫ и ВАЛИДИРОВАНЫ)
         rr = bulk_form.region_code.data
@@ -666,7 +668,7 @@ def generate_bulk_config():
         # --- ОТПРАВКА ---
         buffer.seek(0)
         # Формируем имя файла (Код региона_ID Перевозчика_ID Подразделения_Название маршрута_Дата)
-        filename = f"{rr}_{tttt}_{dddd}_({len(routes)}routes)_{current_date}"
+        filename = f"{rr}_{tttt}_{dddd}_TRFZ_({len(routes)}routes)_{current_date}_{current_time}"
         # filename = f"TRFZ_BULK_{current_date}_({len(routes)}routes).txt"
         log_action(
             action="routes_bulk_config_generated",

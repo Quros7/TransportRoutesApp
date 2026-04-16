@@ -42,7 +42,7 @@ def write_route_body_to_buffer(buffer, route, decimal_places_for_config):
     # 3. СПИСОК ОСТАНОВОК (ЗОН)
     # ==========================================
     for i, stop in enumerate(route.stops):
-        zone_no = str(i)
+        zone_no = str(i).zfill(2) #НОМЕР ОСТАНОВКИ
         km_val = stop["km"]
         zone_name = stop["name"][:100] # длина названия остановки ограничена 100 символами
         s_line = f"{zone_no};{km_val};{zone_name}"
