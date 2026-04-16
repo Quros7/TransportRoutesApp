@@ -476,7 +476,7 @@ def edit_route_prices(route_id):
     )
 
 
-# --- Удаление маршрута из списка ---
+# --- Удаление одного маршрута из списка ---
 @bp.route("/route/delete/<int:route_id>", methods=["POST"])
 @login_required
 def delete_route(route_id):
@@ -508,7 +508,7 @@ def delete_route(route_id):
             action="route_deleted",
             entity_type="route",
             route_id=before_snapshot["id"],
-            details={"before": before_snapshot},
+            details={"deleted_route_name": route.route_name, "deleted_route_id": route.id, "before": before_snapshot},
         )
         db.session.commit()
         flash(f'Маршрут "{route.route_name}" успешно удален.', "success")
@@ -516,6 +516,49 @@ def delete_route(route_id):
         db.session.rollback()
         current_app.logger.error("Ошибка при удалении маршрута %s: %s", route_id, e)
         flash("Произошла ошибка при удалении маршрута.", "danger")
+
+    return redirect(url_for("route_management.route_list"))
+
+
+# --- Удаление нескольких маршрутов из списка ---
+@bp.route("/routes/delete_bulk", methods=["POST"])
+@login_required
+def delete_bulk_routes():
+    # 1. Получаем ID из чекбоксов name="route_ids"
+    route_ids = request.form.getlist("route_ids")
+
+    if not route_ids:
+        flash("Не выбрано ни одного маршрута для удаления.", "warning")
+        return redirect(url_for("route_management.route_list"))
+
+    try:
+        # 2. Загружаем маршруты, проверяя принадлежность пользователю
+        query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
+        routes = db.session.scalars(query).all()
+
+        if not routes:
+            flash("Маршруты для удаления не найдены или у вас нет прав.", "danger")
+            return redirect(url_for("route_management.route_list"))
+
+        count = len(routes)
+        for route in routes:
+            # Логируем каждое удаление (аналогично одиночному методу)
+            before_snapshot = serialize_route(route)
+            log_action(
+                action="route_deleted_bulk",
+                entity_type="route",
+                route_id=route.id,
+                details={"deleted_route_name": route.route_name, "deleted_route_id": route.id, "before": before_snapshot},
+            )
+            db.session.delete(route)
+
+        db.session.commit()
+        flash(f"Успешно удалено маршрутов: {count}.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error("Ошибка при массовом удалении: %s", e)
+        flash("Произошла ошибка при массовом удалении маршрутов.", "danger")
 
     return redirect(url_for("route_management.route_list"))
 

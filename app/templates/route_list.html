@@ -52,14 +52,24 @@
 
                 {# Кнопка и счетчик #}
                 <div class="d-flex align-items-center pt-2 border-top">
-                    {# Кнопка disabled по умолчанию, будет включена через JS #}
+                    {# Кнопка генерации TRFZ из нескольких маршрутов #}
                     <button type="submit" class="btn btn-primary" id="bulk-generate-btn" disabled>
                         <i class="fas fa-file-download"></i> Создать конфигурацию для выбранных маршрутов
                     </button>
+                    {# Кнопка удаления нескольких маршрутов #}
+                    <button type="submit" 
+                            class="btn btn-outline-danger me-2 ms-3" 
+                            id="bulk-delete-btn" 
+                            disabled
+                            formaction="{{ url_for('route_management.delete_bulk_routes') }}"
+                            onclick="return confirm('Вы уверены, что хотите БЕЗВОЗВРАТНО удалить все выбранные маршруты?');">
+                        <i class="fas fa-trash-alt"></i> Удалить выбранные
+                    </button>
+
                     <div class="ms-3 text-secondary" id="selected-count-display">
                         Выбрано: 0
                     </div>
-                    <div class="ms-3 text-secondary" id="limit-hint">(Максимум 10 маршрутов на один файл)</small>
+                    <div class="ms-3 text-secondary" id="limit-hint">(Максимум 10 маршрутов для TRFZ, удаление — без ограничений)</small>
                 </div>
             </div>
 
@@ -139,12 +149,6 @@
                                             </span>
                                         {% endif %}
 
-                                        {#<a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" #}
-                                        {#   class="btn btn-sm btn-outline-success me-2" #}
-                                        {#   data-bs-toggle="tooltip" title="Редактировать остановки">#}
-                                        {#    <i class="fas fa-map-marker-alt"></i> Остановки#}
-                                        {#</a>#}
-
                                         {% if route.stops_set %}
                                             {% if route.is_completed %}
                                                 <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
@@ -168,18 +172,6 @@
                                                 </a>
                                             </span>
                                         {% endif %}
-
-                                        {# <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" #}
-                                        {#   class="btn btn-sm btn-outline-info me-2"#}
-                                        {#   data-bs-toggle="tooltip" title="Редактировать матрицу цен">#}
-                                        {#    <i class="fas fa-dollar-sign"></i> Цены#}
-                                        {#</a>#}
-
-                                        {#<a href="{{ url_for('route_management.generate_config', route_id=route.id) }}" #}
-                                        {#     class="btn btn-sm btn-primary me-2"#}
-                                        {#     data-bs-toggle="tooltip" title="Скачать файл конфигурации">#}
-                                        {#     <i class="fas fa-download"></i> Конфиг#}
-                                        {#</a>#}
 
                                         {% if route.is_completed %}
                                             <span data-bs-toggle="tooltip" title="Скачать файл конфигурации">
@@ -224,18 +216,21 @@
 {% block scripts %}
 {{ super() }}
 <script>
-    // Инициализация всплывающих подсказок Bootstrap (существующий код)
+    // Инициализация всплывающих подсказок Bootstrap
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
       return new bootstrap.Tooltip(tooltipTriggerEl)
     })
 
-    // ИСПРАВЛЕННАЯ ЛОГИКА: "Выбрать все" и счетчик
     document.addEventListener('DOMContentLoaded', function() {
         const selectAll = document.getElementById('select-all');
         const checkboxes = document.querySelectorAll('.route-checkbox');
         const countDisplay = document.getElementById('selected-count-display');
-        const bulkBtn = document.getElementById('bulk-generate-btn');
+        
+        // Две кнопки
+        const bulkGenBtn = document.getElementById('bulk-generate-btn');
+        const bulkDelBtn = document.getElementById('bulk-delete-btn');
+        
         const totalCheckboxes = checkboxes.length;
 
         function updateCount() {
@@ -246,57 +241,62 @@
                 }
             });
             
-            // 1. Обновление отображения и состояния кнопки
+            // 1. Обновление текстового счетчика
             countDisplay.textContent = `Выбрано: ${checkedCount}`;
-            bulkBtn.disabled = checkedCount === 0; 
 
-            // 2. ЛОГИКА ОГРАНИЧЕНИЯ (10 маршрутов)
-            if (checkedCount > 10) {
-                countDisplay.classList.add('text-danger', 'fw-bold');
-                // countDisplay.textContent += ' (Максимум 10 маршрутов!)';
-                bulkBtn.disabled = true; // Блокируем кнопку
-            } else {
-                countDisplay.classList.remove('text-danger', 'fw-bold');
-                bulkBtn.disabled = checkedCount === 0; // Включаем, если выбрано от 1 до 10
+            // 2. Логика для кнопки УДАЛЕНИЯ (без лимита в 10 штук)
+            if (bulkDelBtn) {
+                bulkDelBtn.disabled = (checkedCount === 0);
             }
 
-            // 3. Синхронизация главного чекбокса
+            // 3. Логика для кнопки ГЕНЕРАЦИИ (с лимитом 10)
+            if (bulkGenBtn) {
+                if (checkedCount > 10) {
+                    countDisplay.classList.add('text-danger', 'fw-bold');
+                    bulkGenBtn.disabled = true; 
+                } else {
+                    countDisplay.classList.remove('text-danger', 'fw-bold');
+                    bulkGenBtn.disabled = (checkedCount === 0);
+                }
+            }
+
+            // 4. Синхронизация главного чекбокса "Выбрать все"
             if (checkedCount === totalCheckboxes && totalCheckboxes > 0) {
                 selectAll.checked = true;
                 selectAll.indeterminate = false;
             } else if (checkedCount > 0) {
-                // Если выбрана часть
                 selectAll.checked = false;
                 selectAll.indeterminate = true;
             } else {
-                // Если не выбран ни один
                 selectAll.checked = false;
                 selectAll.indeterminate = false;
             }
         }
 
         // Обработчик "Выбрать все"
-        selectAll.addEventListener('change', function() {
-            const isChecked = this.checked;
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = isChecked;
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                const isChecked = this.checked;
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                });
+                updateCount(); 
             });
-            updateCount(); 
-        });
+        }
 
         // Обработчики индивидуальных чекбоксов
         checkboxes.forEach(checkbox => {
             checkbox.addEventListener('change', updateCount); 
         });
 
-        // Первоначальное обновление счетчика
+        // Первоначальный запуск
         updateCount();
     });
 
+    // Одиночное удаление (без изменений)
     function confirmDelete(routeId, routeName) {
         if (confirm('Вы уверены, что хотите удалить маршрут "' + routeName + '"? Это действие необратимо.')) {
             const form = document.getElementById('delete-route-form');
-            // Динамически меняем action формы на нужный URL
             form.action = "{{ url_for('route_management.delete_route', route_id=0) }}".replace('0', routeId);
             form.submit();
         }
