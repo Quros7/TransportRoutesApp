@@ -239,7 +239,7 @@ def edit_route_stops(route_id):
 
     # print(f"DEBUG: CSRF в форме: {form.csrf_token.data}")
     # print(f"DEBUG: CSRF в запросе: {request.form.get('csrf_token')}")
-    # print(f"DEBUG: Ошибки формы до валидации: {form.errors}")
+    print(f"DEBUG: Ошибки формы до валидации: {form.errors}")
 
     # 1. ОБРАБОТКА POST-ЗАПРОСА
     if form.validate_on_submit():

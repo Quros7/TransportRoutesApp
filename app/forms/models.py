@@ -88,7 +88,7 @@ class TariffTableEntryModel(BaseModel):
 
 class StopModel(BaseModel):
     stop_name: str = Field(..., min_length=1, max_length=100)
-    km_distance: Decimal = Field(..., le=Decimal("99.99"))
+    km_distance: Decimal = Field(..., le=Decimal("999.99"))
 
     @field_validator("km_distance")
     @classmethod
@@ -102,7 +102,7 @@ class StopModel(BaseModel):
     def validate_km_distance_format(cls, v: Decimal):
         # Check that it has exactly 2 decimal places
         if v.as_tuple().exponent != -2 and v != v.quantize(Decimal("0.00")):
-            raise ValueError("Расстояние должно иметь не более двух знаков после запятой (Формат 99.99).")
+            raise ValueError("Расстояние (км) должно иметь не более двух знаков после запятой (Формат 999.99).")
         return v
 
 
