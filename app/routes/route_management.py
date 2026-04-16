@@ -702,7 +702,7 @@ def import_route():
             else:
                 importer = TRFZRouteImporter(raw_data)
                 # TRFZ возвращает список маршрутов
-                routes_to_process = importer.get_routes_data()
+                routes_to_process = importer.get_formatted_route_data()
 
             imported_count = 0
             for data in routes_to_process:

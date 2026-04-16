@@ -13,7 +13,7 @@ class TRFZRouteImporter:
         
         self.lines = [line.strip() for line in content.splitlines() if line.strip()]
 
-    def get_routes_data(self):
+    def get_formatted_route_data(self):
         """
         Главный метод, который возвращает список словарей 
         с данными для создания объектов Route.

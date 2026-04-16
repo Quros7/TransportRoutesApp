@@ -189,37 +189,40 @@ class ExcelRouteImporter:
         return final_matrix
     
     def get_formatted_route_data(self):
-        """Возвращает данные в формате, готовом для SQLAlchemy модели Route"""
+        """Возвращает данные в формате, полностью совместимом с общим роутом импорта"""
         raw = self.get_full_data()
-
         detected_places = self._detect_max_decimal_places(raw["tariffs"])
         
-        # 1. Формируем список остановок (км пока ставим 0, если их нет в Excel)
+        # Подготавливаем остановки
         formatted_stops = [
             {"name": name, "km": i} 
             for i, name in enumerate(raw["stops"], start=0)
         ]
         
-        # 2. ФОРМИРУЕМ ШАПКУ
-        route_info = raw["route_info"]
-        route_info["decimal_places"] = detected_places
-
-        # 3. Формируем список тарифных таблиц (без матриц внутри)
-        tariff_tables = []
-        for t in raw["tariffs"]:
-            tariff_tables.append({
-                "tab_number": t["tab_number"],
-                "tariff_name": t["tariff_name"],
-                "table_type_code": t["table_type_code"],
-                "ss_series_codes": t["ss_series_codes"],
-            })
-            
-        # 4. Собираем итоговую матрицу цен
-        final_matrix = self.build_final_matrix(raw)
+        # Извлекаем исходные данные из Excel
+        info = raw["route_info"]
         
+        # СТРУКТУРА, КАК В TRFZ
         return {
-            "route_info": route_info,
+            "common": {
+                "region_code": str(info.get("region_code", "")),
+                "carrier_id": str(info.get("carrier_id", "")),
+                "unit_id": str(info.get("unit_id", "")),
+                "decimal_places": str(detected_places)
+            },
+            "route_info": {
+                "route_number": str(info.get("route_number", "")),
+                "route_name": str(info.get("route_name", "")),
+                "transport_type": str(info.get("transport_type", "0x01"))
+            },
             "stops": formatted_stops,
-            "tariff_tables": tariff_tables,
-            "price_matrix": final_matrix
+            "tariff_tables": [
+                {
+                    "tab_number": t["tab_number"],
+                    "tariff_name": t["tariff_name"],
+                    "table_type_code": t["table_type_code"],
+                    "ss_series_codes": t["ss_series_codes"],
+                } for t in raw["tariffs"]
+            ],
+            "price_matrix": self.build_final_matrix(raw)
         }
