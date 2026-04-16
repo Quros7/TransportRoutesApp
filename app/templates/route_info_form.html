@@ -2,6 +2,7 @@
 
 {% block content %}
     <h2>{{ title }}</h2>
+    <p>Маршрут: <strong>{{ route.route_name }}</strong></p>
     
     <form method="POST" id="route-info-form">
         {{ form.hidden_tag() }}

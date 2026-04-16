@@ -207,7 +207,7 @@ def create_or_edit_route_info(route_id):
     # --- GET-запрос (или валидация не пройдена) ---
 
     # Устанавливаем заголовок страницы
-    title = "Создание маршрута: Шаг 1" if route is None else f"Редактирование маршрута: {route.route_name}"
+    title = "Создание маршрута: Шаг 1" if route is None else f"Редактирование маршрута: Шаг 1"
 
     return render_template("route_info_form.html", form=form, route=route, title=title)
 
@@ -472,7 +472,7 @@ def edit_route_prices(route_id):
         "route_prices_matrix.html",
         form=form,
         route=route,
-        title=f"Редактирование цен: Шаг 3 ({route.route_name})",
+        title=f"Редактирование цен: Шаг 3",
     )
 
 

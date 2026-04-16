@@ -40,87 +40,127 @@ body {
     margin-top: auto;
 }
 
-/* ШАГ 3 - ЦЕНЫ */
-
-/* Подсветка самой ячейки с инпутами */
-.table-active-cell {
-    background-color: #fff9c4 !important; /* Светло-желтый */
-    outline: 2px solid #ffeb3b;
-    transition: all 0.2s;
-}
-/* Подсветка заголовков (От/До) */
-.table-active-header {
-    background-color: #fbc02d !important; /* Более насыщенный желтый */
-    color: #000 !important;
-    font-weight: bold;
-}
-/* Плавный переход для всех th и td */
-.price-matrix th, .price-matrix td {
-    transition: background-color 0.2s;
-}
-
-/* Мягкая подсветка строки */
-.table-row-highlight {
-    background-color: #fffde7 !important; /* Очень светлый желтый */
-}
-
-/* Мягкая подсветка столбца */
-.table-col-highlight {
-    background-color: #fffde7 !important;
-}
-
-/* Активная ячейка (на пересечении) — должна быть ярче */
-.table-active-cell {
-    background-color: #fff9c4 !important;
-    outline: 2px solid #fbc02d !important;
-    z-index: 5;
-}
-
-
+/* --- 1. Базовый макет и общие стили ячеек --- */
 .price-matrix {
-    border-collapse: separate; /* Важно для корректной работы sticky border */
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: separate;
     border-spacing: 0;
     margin-bottom: 1px;
 }
 
-/* 2. Закрепляем верхнюю строку (Шапка) */
-.price-matrix thead th {
-    position: sticky;
-    top: 0;
-    z-index: 10; /* Поверх обычных ячеек */
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
-    box-shadow: inset 0 -1px 0 #dee2e6; /* Имитация границы при скролле */
+.price-matrix th, 
+.price-matrix td {
+    border: 1px solid #adb5bd;
+    transition: background-color 0.2s;
+    padding: 8px;
 }
 
-/* 3. Закрепляем первый столбец (Левая колонка) */
+/* --- 2. Закрепленные области (Sticky) --- */
+
+/* Общие свойства для всех "липких" заголовков */
+.price-matrix thead th,
 .price-matrix tbody th {
     position: sticky;
-    left: 0;
-    z-index: 9;
     background-color: #f8f9fa;
-    border-right: 2px solid #dee2e6;
-    box-shadow: inset -1px 0 0 #dee2e6;
-    white-space: nowrap; /* Чтобы названия не переносились и не ломали высоту */
-    min-width: 150px;
+    z-index: 9;
 }
 
-/* 4. Пересечение (левый верхний угол "От / До") */
+/* Верхняя шапка */
+.price-matrix thead th {
+    top: 0;
+    z-index: 10;
+    border-bottom: 2px solid #dee2e6;
+    box-shadow: inset 0 -1px 0 #dee2e6;
+    
+    /* Текстовые настройки */
+    white-space: normal;
+    word-wrap: break-word;
+    line-height: 1.2;
+    text-align: center;
+    vertical-align: middle;
+    min-height: 80px;
+    padding: 10px 5px;
+}
+
+/* Левая колонка */
+.price-matrix tbody th {
+    left: 0;
+    border-right: 2px solid #dee2e6;
+    box-shadow: inset -1px 0 0 #dee2e6;
+    white-space: normal; /* Разрешаем перенос для длинных названий */
+}
+
+/* Пересечение (Угол "От / До") */
 .price-matrix thead th:first-child {
     left: 0;
-    z-index: 11; /* Самый высокий приоритет */
+    z-index: 11;
     background-color: #e9ecef;
 }
 
-/* Подсветка активных элементов (из прошлого шага) */
+/* --- 3. Геометрия и размеры --- */
+
+/* Ширина первой колонки */
+.price-matrix tbody th, 
+.price-matrix thead th:first-child {
+    width: 185px;
+    min-width: 150px;
+    max-width: 200px;
+}
+
+/* Ширина всех колонок с данными */
+.price-matrix thead th:not(:first-child),
+.price-matrix td {
+    width: 150px;
+    min-width: 150px;
+}
+
+/* --- 4. Интерактив и визуальные состояния --- */
+
+/* Подсветка строки и столбца (мягкая) */
+.table-row-highlight,
+.table-col-highlight {
+    background-color: #fffde7 !important;
+}
+
+/* Активная ячейка (на которой фокус) */
 .table-active-cell {
     background-color: #fff9c4 !important;
-    outline: 2px solid #ffeb3b;
+    outline: 2px solid #fbc02d !important; /* Объединил стили в один яркий вариант */
+    z-index: 5;
 }
+
+/* Активные заголовки (строка/столбец) */
 .table-active-header {
     background-color: #fbc02d !important;
     color: #000 !important;
-    z-index: 12 !important; /* Чтобы подсветка была видна над всем */
+    font-weight: bold;
+    z-index: 12 !important;
+}
+
+/* Пустые/недоступные ячейки */
+.price-matrix td.bg-light {
+    background-color: #f1f3f5;
+    background-image: linear-gradient(45deg, #e9ecef 25%, transparent 25%, transparent 50%, #e9ecef 50%, #e9ecef 75%, transparent 75%, transparent);
+    background-size: 10px 10px;
+}
+
+/* --- 5. Внутренние элементы ячейки --- */
+
+.price-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.tariff-input-group label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.tariff-input-group:last-child {
+    border-bottom: none;
 }
 
 /* Админка */

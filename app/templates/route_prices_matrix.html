@@ -5,9 +5,9 @@
     <p>Маршрут: <strong>{{ route.route_name }}</strong></p>
     
     <div class="alert alert-info">
-        Заполните цены для проезда из начальной остановки (строка) до конечной остановки (столбец) для каждого тарифа.
+        Введите стоимость проезда из начальной остановки (строка) до конечной остановки (столбец) для каждого тарифа.
         <br>
-        <strong>Внимание:</strong> По умолчанию все цены равны 0 (что означает невозможность проезда между указанными зонами).
+        <strong>Внимание:</strong> По умолчанию все цены равны 0 (пустые ячейки заполнятся нулями при сохранении таблицы).
     </div>
 
     <form method="POST" id="price-matrix-form">
@@ -22,7 +22,7 @@
             <table class="table table-bordered table-sm price-matrix">
                 <thead>
                     <tr>
-                        <th class="align-top text-center" style="min-width: 120px;">От / До</th>
+                        <th class="align-top text-center">От / До</th>
                         {% set is_city_route = route.transport_type == '0x02' %}
                         {% for stop in route.stops %}
                             {# Разрешаем отображение заголовка для Остановки 0 (индекс 0), если это городской маршрут. #}
