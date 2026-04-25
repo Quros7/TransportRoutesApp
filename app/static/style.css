@@ -37,13 +37,15 @@ body {
 }
 
 
-/* ШАГ 1 - ИНФОРМАЦИЯ О МАРШРУТЕ*/
+/* ШАГ 1 - ИНФОРМАЦИЯ О МАРШРУТЕ */
 
 /* Прижимаем блоки к самому низу */
 #route-info-form .row > [class*="col-"], 
 #route-info-form .row > [class*="col-"] {
     margin-top: auto;
 }
+
+/* ШАГ 3 - Матрица цен */
 
 /* --- 1. Базовый макет и общие стили ячеек --- */
 .price-matrix {
@@ -94,12 +96,13 @@ body {
     border-right: 2px solid #dee2e6;
     box-shadow: inset -1px 0 0 #dee2e6;
     white-space: normal; /* Разрешаем перенос для длинных названий */
+    word-wrap: break-word;
 }
 
 /* Пересечение (Угол "От / До") */
 .price-matrix thead th:first-child {
     left: 0;
-    z-index: 11;
+    z-index: 13;
     background-color: #e9ecef;
 }
 
@@ -138,7 +141,7 @@ body {
 /* Активные заголовки (строка/столбец) */
 .table-active-header {
     background-color: #fbc02d !important;
-    color: #000 !important;
+    color: #000;
     font-weight: bold;
     z-index: 12 !important;
 }
@@ -168,7 +171,7 @@ body {
     border-bottom: none;
 }
 
-/* Админка */
+/* АДМИНКА */
 
 /* Общее */
 /* Базовое правило для контейнеров с фиксированным скроллом */
