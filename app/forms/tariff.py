@@ -1,12 +1,12 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField
+from wtforms import HiddenField, StringField
 from wtforms.validators import DataRequired
 
 from .models import TariffTableEntryModel
 
 
 class TariffTableEntryForm(FlaskForm):
-    uid = StringField("UID")
+    uid = HiddenField("UID")
     # 1. Название тарифа (для Шага 3 и отображения)
     tariff_name = StringField("Название тарифа", validators=[DataRequired()])
 

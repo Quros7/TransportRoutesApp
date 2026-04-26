@@ -83,6 +83,7 @@ class RouteInfoForm(FlaskForm):
                     "tariff_name": entry.form.tariff_name.data or "",
                     "table_type_code": entry.form.table_type_code.data or "",
                     "ss_series_codes": entry.form.ss_series_codes.data or "",
+                    "uid": entry.form.uid.data,
                 }
                 for entry in self.tariff_tables.entries
                 # if entry.form.tariff_name.data or entry.form.table_type_code.data or entry.form.ss_series_codes.data

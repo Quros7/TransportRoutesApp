@@ -2,7 +2,7 @@
 
 {% block content %}
     <h2>{{ title }}</h2>
-    <p>Маршрут: <strong>{{ route.route_name }}</strong></p>
+    <p>Маршрут: <strong>{{ route.route_name if route.route_name else 'Новый маршрут' }}</strong></p>
     
     <form method="POST" id="route-info-form">
         {{ form.hidden_tag() }}
@@ -81,6 +81,7 @@
             {% for entry_form in form.tariff_tables %}
                 <div class="card mb-3 tariff-table-entry" data-index="{{ loop.index0 }}">
                     <div class="card-body">
+
                         <h5 class="card-title">Таблица {{ loop.index }}</h5> 
                         
                         {# ПОЛЯ В СООТВЕТСТВИИ С TariffTableEntryForm #}
@@ -150,7 +151,7 @@
             <div class="card-body">
                 <input type="hidden" name="tariff_tables-NEW_INDEX-uid" value="NEW_UID">
 
-                <h5 class="card-title">Таблица NEW_INDEX</h5>
+                <h5 class="card-title">Таблица NEW_LABEL</h5>
                 
                 <div class="row">
                     <div class="col-md-6 mb-3">
@@ -200,7 +201,10 @@
             return;
         }
 
-        let newHtml = tariffTableTemplate.replace(/NEW_INDEX/g, count).replace(/NEW_UID/g, newUid); // Подставляем ID в скрытое поле
+        let newHtml = tariffTableTemplate
+            .replace(/NEW_INDEX/g, count)
+            .replace(/NEW_LABEL/g, count + 1)
+            .replace(/NEW_UID/g, newUid); // Подставляем ID в скрытое поле
         container.insertAdjacentHTML('beforeend', newHtml);
         
         // Обновление заголовков и состояния полей после добавления
@@ -213,11 +217,11 @@
     function removeTariffTableEntry(button) {
         const container = document.getElementById('tariff-tables-container');
         const entry = button.closest('.tariff-table-entry');
-        
         const entries = container.querySelectorAll('.tariff-table-entry');
+
         const index = Array.from(entries).indexOf(entry);
         
-        // 💥 Запрет на удаление Таблицы 1
+        // Запрет на удаление Таблицы 1
         if (index === 0) {
             alert("Таблицу 1 удалить нельзя. Маршрут должен иметь хотя бы одну таблицу.");
             return;
@@ -252,16 +256,16 @@
         container.querySelectorAll('.tariff-table-entry').forEach((entry, index) => {
             const title = entry.querySelector('h5.card-title');
             const removeButton = entry.querySelector('.remove-tariff-table');
-            const typeCodeInput = entry.querySelector('.table-type-code');
+            const typeCodeField = entry.querySelector('.table-type-code');
 
             // Устанавливаем заголовок
-            title.textContent = 'Таблица ' + (index + 1);
+            if (title) title.textContent = 'Таблица ' + (index + 1);
             
             if (index === 0) {
-                // Таблица 1: Код должен быть "02", кнопка удаления скрыта
-                if (typeCodeInput) {
-                    // typeCodeInput.value = '02'; // Устанавливаем "02"
-                    // typeCodeInput.setAttribute('readonly', true);
+                // Таблица 1: Код сериb должен быть "02", кнопка удаления скрыта
+                if (typeCodeField) {
+                    // typeCodeField.value = '02'; // Устанавливаем "02"
+                    // typeCodeField.setAttribute('readonly', true);
                     typeCodeField.value = '02';
                     typeCodeField.readOnly = true;
                 }

@@ -113,7 +113,7 @@ def create_or_edit_route_info(route_id):
         # 1. Сбор данных тарифных таблиц
         tariff_tables_data = []
         for i, t in enumerate(form.tariff_tables.entries):
-            table_uid = t.form.uid.data or str(i + 1)  # Если UID не заполнен, используем индекс
+            table_uid = t.form.uid.data
             # 1. Получаем строку, которую ввел пользователь
             #   raw_ss_codes_string = t.form.ss_series_codes.data
             # Если поле пустое (для Таблицы 1), используем пустую строку
@@ -224,8 +224,9 @@ def create_or_edit_route_info(route_id):
             flash("Изменения сохранены.", "success")
             # Переход к Шагу 2
             return redirect(url_for("route_management.edit_route_stops", route_id=route.id))
-
-    # --- GET-запрос (или валидация не пройдена) ---
+    else:
+        # ВРЕМЕННО: выводим все ошибки формы в консоль сервера
+        print(f"Ошибки формы: {form.errors}")
 
     # Устанавливаем заголовок страницы
     title = "Создание маршрута: Шаг 1" if route is None else f"Редактирование маршрута: Шаг 1"

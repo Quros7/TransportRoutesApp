@@ -76,7 +76,7 @@
                                                     data-tariff-id="{{ tariff_id }}"
                                                     
                                                     {# Значение подтягивается по UID тарифа #}
-                                                    value="{{ prices[tariff_id] if tariff_id in prices else 0 }}"
+                                                    value="{{ prices[tariff_id] if tariff_id in prices else ''}}"
                                                     
                                                     placeholder="Цена"
                                                 >
