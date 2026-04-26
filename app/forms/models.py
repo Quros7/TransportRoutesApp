@@ -53,6 +53,7 @@ class RegistrationModel(BaseModel):
 
 
 class TariffTableEntryModel(BaseModel):
+    uid: str = Field(...)
     tariff_name: str = Field(..., min_length=1, max_length=50)
     table_type_code: str = Field(..., min_length=1, max_length=2)
     ss_series_codes: str = Field(default="")

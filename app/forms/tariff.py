@@ -6,6 +6,7 @@ from .models import TariffTableEntryModel
 
 
 class TariffTableEntryForm(FlaskForm):
+    uid = StringField("UID")
     # 1. Название тарифа (для Шага 3 и отображения)
     tariff_name = StringField("Название тарифа", validators=[DataRequired()])
 
@@ -34,6 +35,7 @@ class TariffTableEntryForm(FlaskForm):
                 "tariff_name": self.tariff_name.data,
                 "table_type_code": self.table_type_code.data,
                 "ss_series_codes": self.ss_series_codes.data,
+                "uid": self.uid.data,
             }
             TariffTableEntryModel(**tariff_data)
             return True

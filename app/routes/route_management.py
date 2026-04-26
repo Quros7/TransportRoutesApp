@@ -113,6 +113,7 @@ def create_or_edit_route_info(route_id):
         # 1. Сбор данных тарифных таблиц
         tariff_tables_data = []
         for i, t in enumerate(form.tariff_tables.entries):
+            table_uid = t.form.uid.data or str(i + 1)  # Если UID не заполнен, используем индекс
             # 1. Получаем строку, которую ввел пользователь
             #   raw_ss_codes_string = t.form.ss_series_codes.data
             # Если поле пустое (для Таблицы 1), используем пустую строку
@@ -126,6 +127,8 @@ def create_or_edit_route_info(route_id):
             type_code = "02" if i == 0 else t.form.table_type_code.data
 
             table_entry = {
+                # UID для связи с матрицей цен
+                "uid": table_uid,
                 # Номер таблицы (TabN)
                 "tab_number": i + 1,
                 # Название тарифа (для Шага 3 и отображения)
@@ -174,22 +177,40 @@ def create_or_edit_route_info(route_id):
         else:
             # --- Обновление существующего объекта Route ---
 
-            # 1. Запоминаем критические состояния ДО обновления
+            # Запоминаем критические состояния ДО обновления
             before_snapshot = serialize_route(route)
             old_transport_type = route.transport_type
             old_tariffs = route.tariff_tables  # Это список словарей JSON
 
-            # 2. Обновляем поля
+            # Обновляем поля
             for key, value in data_to_save.items():
                 setattr(route, key, value)
+            
+            # АВТОМАТИЧЕСКАЯ ОЧИСТКА МАТРИЦЫ ЦЕН
+            active_uids = [str(t["uid"]) for t in tariff_tables_data] # Список активных UID
+            
+            cleaned_price_matrix = []
+            for row in route.price_matrix:
+                new_row = []
+                for cell in row:
+                    if isinstance(cell, dict):
+                        # Оставляем только те ключи (цены), чьи тарифы (UID) не были удалены
+                        filtered_cell = {k: v for k, v in cell.items() if str(k) in active_uids}
+                        new_row.append(filtered_cell)
+                    else:
+                        new_row.append(cell)
+                cleaned_price_matrix.append(new_row)
+            
+            # Перезаписываем матрицу очищенной версией
+            route.price_matrix = cleaned_price_matrix
 
-            # 3. ЛОГИКА УМНОГО СБРОСА
+            # ЛОГИКА УМНОГО СБРОСА
             # Сравниваем тип транспорта и состав тарифных таблиц
             # В Python списки словарей (tariff_tables_data vs old_tariffs) сравниваются глубоко по значениям
             if old_transport_type != form.transport_type.data or old_tariffs != tariff_tables_data:
                 route.is_completed = False  # Матрица цен теперь требует перепроверки
                 flash(
-                    "Структура тарифов или тип транспорта изменились. Пожалуйста, проверьте цены на Шаге 3.",
+                    "Структура тарифов или тип транспорта изменились. Проверьте цены на Шаге 3.",
                     "info",
                 )
 

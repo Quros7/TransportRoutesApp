@@ -57,15 +57,15 @@
                                     {# Ячейка для заполнения #}
                                     <td data-start-index="{{ i }}" data-end-index="{{ j }}">
                                         {% for tariff_table in route.tariff_tables %}
-                                            {% set tariff_id = tariff_table.tab_number %} {# Используем TabN как ID (1, 2, 3...) #}
+                                            {% set tariff_id = tariff_table.uid %} {# Используем UID как уникальный ключ #}
                                             
                                             <div class="tariff-input-group mb-1">
                                                 <label class="small text-muted mb-0">
                                                     {{ tariff_table.tariff_name }}:
                                                 </label>
+
                                                 {# 1. Безопасно достаем строку матрицы #}
                                                 {% set row = route.price_matrix[i] if route.price_matrix and route.price_matrix is iterable and route.price_matrix[i] is defined else none %}
-
                                                 {# 2. Безопасно достаем ячейку (цены тарифов) #}
                                                 {% set prices = row[j] if row and row[j] is defined and row[j] is mapping else {} %}
                                                 <input 
@@ -75,10 +75,8 @@
                                                     class="form-control form-control-sm price-input"
                                                     data-tariff-id="{{ tariff_id }}"
                                                     
-                                                    {# Загрузка существующих данных #}
-                                                    {# Проверяем, существует ли цена в матрице (matrix[i][j]) #}
-                                                    {# {% set prices = route.price_matrix[i][j] if route.price_matrix and route.price_matrix[i] is defined and route.price_matrix[i][j] is defined else {} %} #}
-                                                    value="{{ prices[tariff_id|string] if tariff_id|string in prices else '' }}"
+                                                    {# Значение подтягивается по UID тарифа #}
+                                                    value="{{ prices[tariff_id] if tariff_id in prices else 0 }}"
                                                     
                                                     placeholder="Цена"
                                                 >
@@ -215,7 +213,6 @@
             inputs.forEach(input => {
                 const tariffId = input.getAttribute('data-tariff-id');
                 
-                // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ТУТ:
                 let rawValue = input.value.trim().replace(',', '.');
                 
                 let numericValue = 0;

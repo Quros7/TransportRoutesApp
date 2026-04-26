@@ -148,6 +148,8 @@
     const tariffTableTemplate = `
         <div class="card mb-3 tariff-table-entry">
             <div class="card-body">
+                <input type="hidden" name="tariff_tables-NEW_INDEX-uid" value="NEW_UID">
+
                 <h5 class="card-title">Таблица NEW_INDEX</h5>
                 
                 <div class="row">
@@ -179,12 +181,18 @@
         </div>
     `;
 
+    // Функция для генерации короткого ID
+    function generateUID() {
+        return 't' + Math.random().toString(36).substr(2, 9);
+    }
+
     /**
      * Добавляет новое поле для ввода тарифа.
      */
     function addTariffTableEntry() {
         const container = document.getElementById('tariff-tables-container');
         const count = container.querySelectorAll('.tariff-table-entry').length;
+        const newUid = generateUID();
         
         // Проверка лимита в 10 таблиц
         if (count >= 10) {
@@ -192,7 +200,7 @@
             return;
         }
 
-        let newHtml = tariffTableTemplate.replace(/NEW_INDEX/g, count);
+        let newHtml = tariffTableTemplate.replace(/NEW_INDEX/g, count).replace(/NEW_UID/g, newUid); // Подставляем ID в скрытое поле
         container.insertAdjacentHTML('beforeend', newHtml);
         
         // Обновление заголовков и состояния полей после добавления
@@ -201,7 +209,6 @@
 
     /**
      * Удаляет поле тарифа и пересчитывает индексы.
-     * ЭТОТ ФУНКЦИОНАЛ ИСПРАВЛЕН
      */
     function removeTariffTableEntry(button) {
         const container = document.getElementById('tariff-tables-container');
