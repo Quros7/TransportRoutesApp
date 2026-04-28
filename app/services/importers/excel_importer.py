@@ -166,6 +166,7 @@ class ExcelRouteImporter:
     
     def build_final_matrix(self, parsed_data):
         stops_count = len(parsed_data["stops"])
+        
         # Создаем пустую матрицу
         final_matrix = [[{} for _ in range(stops_count)] for _ in range(stops_count)]
         
@@ -204,7 +205,7 @@ class ExcelRouteImporter:
         
         # Подготавливаем остановки
         formatted_stops = [
-            {"name": name, "km": i} 
+            {"name": str(name).strip(), "km": "{:.2f}".format(float(i))} 
             for i, name in enumerate(raw["stops"], start=0)
         ]
         

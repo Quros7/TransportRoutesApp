@@ -313,6 +313,7 @@ def edit_route_stops(route_id):
             route.is_completed = False
             flash("Состав остановок изменился. Пожалуйста, проверьте цены.", "info")
             flash("Изменения сохранены.", "success")
+            print("ИЗМЕНЕНИЯ ОСТАНОВОК:\nДО:", route.stops, "\nПосле:", new_stop_data)
         else:
             flash("Остановки сохранены. Изменений не обнаружено.", "secondary")
 
@@ -509,6 +510,7 @@ def edit_route_prices(route_id):
                 db.session.commit()
                 if has_changes:
                     flash("Цены успешно сохранены! Маршрут готов к экспорту.", "success")
+                    print("ИЗМЕНЕНИЯ ЦЕН:\nДО:", before_matrix, "\nПОСЛЕ:", new_matrix)
                 else:
                     flash("Изменений в ценах не обнаружено. Маршрут готов к экспорту.", "secondary")
 

@@ -132,7 +132,7 @@
                                 {# Дата последнего изменения #}
                                 <td>
                                     {% if route.updated_at %}
-                                        <span class="small" data-bs-toggle="tooltip" title="{{ " ".join(route.updated_at.split('.')[0].split('T')) }}">
+                                        <span class="small">
                                             {{ " ".join(route.updated_at.split('.')[0].split('T')) }}
                                         </span>
                                     {% else %}
