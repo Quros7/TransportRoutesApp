@@ -43,11 +43,13 @@ class Route(db.Model):
     id: so.Mapped[int] = so.mapped_column(primary_key=True)
     user_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey(User.id), index=True)
 
-    # СТАРЫЕ ПОЛЯ
     route_name: so.Mapped[str] = so.mapped_column(sa.String(128))
     transport_type: so.Mapped[str] = so.mapped_column(sa.String(4))
 
-    # НОВЫЕ ПОЛЯ ДЛЯ КОНФИГУРАЦИИ
+    start_date: so.Mapped[str | None] = so.mapped_column(sa.String(6), nullable=True)
+    updated_at: so.Mapped[str | None] = so.mapped_column(sa.String(32), nullable=True)
+
+    # ПОЛЯ ДЛЯ КОНФИГУРАЦИИ
     carrier_id: so.Mapped[str] = so.mapped_column(sa.String(10))
     unit_id: so.Mapped[str] = so.mapped_column(sa.String(10))
     route_number: so.Mapped[str] = so.mapped_column(sa.String(10))

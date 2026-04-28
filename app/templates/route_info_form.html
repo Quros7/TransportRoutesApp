@@ -29,6 +29,12 @@
                 {{ form.decimal_places(class="form-select") }}
                 {% for error in form.decimal_places.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
             </div>
+            
+            <div class="col-md-3 mb-3">
+                {{ form.start_date.label(class="form-label") }}
+                {{ form.start_date(class="form-control", type="date") }}
+                {% for error in form.start_date.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
         </div>
         
         <hr>

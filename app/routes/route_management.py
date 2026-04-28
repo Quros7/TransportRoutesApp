@@ -83,21 +83,26 @@ def create_or_edit_route_info(route_id):
         route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
 
         if route is None:
-            # Маршрут не найден или принадлежит другому пользователю
             flash("Маршрут не найден.", "danger")
             return redirect(url_for("route_management.route_list"))
-
-        # 2. Инициализация формы существующими данными
-        # obj=route загружает все скалярные поля (route_name, carrier_id и т.д.)
-        # Примечание: data=dict(tariffs=route.tariffs) необходим для корректной загрузки
-        # FieldList с подформами (TariffForm), хранящимися в JSON.
+        
+        # Создаем форму. obj=route заполнит все текстовые поля (name, number и т.д.)
         form = RouteInfoForm(obj=route, data={"tariff_tables": route.tariff_tables})
-        # Позволяем Flask-WTF работать с динамически удаленными/добавленными полями
         form.tariff_tables.min_entries = 0
+
+        # ПЕРЕЗАПИСЫВАЕМ дату объектом date, если это GET-запрос, чтобы в поле попал тип date, а не str из БД
+        if request.method == "GET" and route.start_date:
+            try:
+                form.start_date.data = datetime.strptime(route.start_date, "%y%m%d").date()
+            except Exception as e:
+                print(f"Ошибка парсинга даты: {e}")
+                form.start_date.data = None
 
     else:
         # --- РЕЖИМ СОЗДАНИЯ ---
         form = RouteInfoForm()
+
+        form.start_date.data = datetime.now().date()
 
         # Предзаполнение полей из профиля пользователя (current_user)
         # Эта логика выполняется только в режиме создания, до обработки POST-запроса,
@@ -110,6 +115,9 @@ def create_or_edit_route_info(route_id):
             form.unit_id.data = current_user.default_unit_id
 
     if form.validate_on_submit():
+        # Конвертируем дату из формы обратно в строку YYMMDD
+        new_start_date_str = form.start_date.data.strftime("%y%m%d")
+
         # 1. Сбор данных тарифных таблиц
         tariff_tables_data = []
         for i, t in enumerate(form.tariff_tables.entries):
@@ -144,6 +152,7 @@ def create_or_edit_route_info(route_id):
 
         # 2. Общие данные для сохранения
         data_to_save = {
+            "start_date": new_start_date_str,
             "route_name": form.route_name.data,
             "transport_type": form.transport_type.data,
             "carrier_id": form.carrier_id.data,
@@ -156,7 +165,11 @@ def create_or_edit_route_info(route_id):
 
         if route is None:
             # --- Создание нового объекта Route ---
-            new_route = Route(user_id=current_user.id, stops=[], price_matrix=[], **data_to_save)
+            new_route = Route(
+                updated_at=datetime.now().isoformat(),
+                user_id=current_user.id, 
+                stops=[], price_matrix=[], 
+                **data_to_save)
             db.session.add(new_route)
             db.session.flush()
             log_action(
@@ -182,6 +195,15 @@ def create_or_edit_route_info(route_id):
             old_transport_type = route.transport_type
             old_tariffs = route.tariff_tables  # Это список словарей JSON
 
+            # Нужно проверить, изменилось ли что-то существенное. Сравниваем словари. 
+            # data_to_save содержит: name, type, ids, number, region, decimal, tariffs, start_date.
+            has_changes = False
+            for key, value in data_to_save.items():
+                if getattr(route, key) != value:
+                    has_changes = True
+                    route.updated_at = datetime.now().isoformat() # Добавляем обновление даты правок
+                    break
+
             # Обновляем поля
             for key, value in data_to_save.items():
                 setattr(route, key, value)
@@ -204,15 +226,13 @@ def create_or_edit_route_info(route_id):
             # Перезаписываем матрицу очищенной версией
             route.price_matrix = cleaned_price_matrix
 
-            # ЛОГИКА УМНОГО СБРОСА
-            # Сравниваем тип транспорта и состав тарифных таблиц
-            # В Python списки словарей (tariff_tables_data vs old_tariffs) сравниваются глубоко по значениям
-            if old_transport_type != form.transport_type.data or old_tariffs != tariff_tables_data:
-                route.is_completed = False  # Матрица цен теперь требует перепроверки
-                flash(
-                    "Структура тарифов или тип транспорта изменились. Проверьте цены на Шаге 3.",
-                    "info",
-                )
+            # Логика сброса флага готовности (используем уже имеющиеся переменные)
+            # Если изменились тарифы или тип транспорта
+            if before_snapshot.get('transport_type') != data_to_save['transport_type'] or \
+               before_snapshot.get('tariff_tables') != data_to_save['tariff_tables']:
+                
+                route.is_completed = False
+                flash("Структура тарифов или тип транспорта изменились. Проверьте цены на Шаге 3.", "info")
 
             log_action(
                 action="route_info_updated",
@@ -221,7 +241,12 @@ def create_or_edit_route_info(route_id):
                 details={"before": before_snapshot, "after": serialize_route(route)},
             )
             db.session.commit()
-            flash("Изменения сохранены.", "success")
+
+            if has_changes:
+                flash("Изменения сохранены.", "success")
+            else:
+                flash("Изменений не обнаружено.", "secondary")
+            
             # Переход к Шагу 2
             return redirect(url_for("route_management.edit_route_stops", route_id=route.id))
     else:
@@ -285,7 +310,10 @@ def edit_route_stops(route_id):
         before_is_completed = route.is_completed
         if route.stops != new_stop_data:
             route.is_completed = False
-            flash("Состав остановок изменился. Пожалуйста, проверьте цены.", "warning")
+            flash("Состав остановок изменился. Пожалуйста, проверьте цены.", "info")
+            flash("Изменения сохранены.", "success")
+        else:
+            flash("Остановки сохранены. Изменений не обнаружено.", "secondary")
 
         route.stops = new_stop_data
         route.stops_set = True
@@ -302,7 +330,6 @@ def edit_route_stops(route_id):
         )
         db.session.commit()
 
-        flash("Остановки сохранены.", "success")
         return redirect(url_for("route_management.edit_route_prices", route_id=route.id))
 
     # 2. ЕСЛИ ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)
@@ -331,24 +358,24 @@ def edit_route_stops(route_id):
     # или если были другие submit-кнопки.
     # Fallthrough to render_template below for validation errors.
 
-    # 3. ОБРАБОТКА GET-ЗАПРОСА (инициализация данных)
-    if request.method == "GET" and route.stops:
-        # Очищаем FieldList перед заполнением, чтобы избежать дублирования
-        form.stops.entries = []
-        for stop_data in route.stops:
-            # Преобразуем строку 'km' из БД обратно в float для формы
-            try:
-                km_for_form = float(stop_data["km"])
-            except (TypeError, ValueError):
-                # Если по какой-то причине значение некорректно, ставим 0.0
-                km_for_form = 0.0
+    # # 3. ОБРАБОТКА GET-ЗАПРОСА (инициализация данных)
+    # if request.method == "GET" and route.stops:
+    #     # Очищаем FieldList перед заполнением, чтобы избежать дублирования
+    #     form.stops.entries = []
+    #     for stop_data in route.stops:
+    #         # Преобразуем строку 'km' из БД обратно в float для формы
+    #         try:
+    #             km_for_form = float(stop_data["km"])
+    #         except (TypeError, ValueError):
+    #             # Если по какой-то причине значение некорректно, ставим 0.0
+    #             km_for_form = 0.0
 
-            # При инициализации формы km_distance лучше передавать как str или float,
-            # если он был сохранен как float, но DecimalField справится с float.
-            form.stops.append_entry({"stop_name": stop_data["name"], "km_distance": km_for_form})
+    #         # При инициализации формы km_distance лучше передавать как str или float,
+    #         # если он был сохранен как float, но DecimalField справится с float.
+    #         form.stops.append_entry({"stop_name": stop_data["name"], "km_distance": km_for_form})
 
-    # 3. РЕНДЕРИНГ ШАБЛОНА
-    return render_template("route_stops_form.html", form=form, route=route, title="Редактирование остановок: Шаг 2")
+    # # 3. РЕНДЕРИНГ ШАБЛОНА
+    # return render_template("route_stops_form.html", form=form, route=route, title="Редактирование остановок: Шаг 2")
 
 
 # --- Форма с ценами за каждый отрезок пути (Этап 3) ---
@@ -460,19 +487,30 @@ def edit_route_prices(route_id):
                                     except (ValueError, TypeError):
                                         cell[t_id] = 0.0
                 
-                # Только после очистки сохраняем в базу
+                # После очистки запоминаем состояние ДО для логов и сравнения
                 before_matrix = deepcopy(route.price_matrix)
+                has_changes = (before_matrix != new_matrix)
+
+                # Сохраняем в базу
                 route.price_matrix = new_matrix
                 route.is_completed = True
+
+                # Обновляем техническую дату, если были правки
+                if has_changes:
+                    route.updated_at = datetime.now().isoformat()
 
                 log_action(
                     action="route_prices_updated",
                     entity_type="route",
                     route_id=route.id,
-                    details={"before_price_matrix": before_matrix, "after_price_matrix": new_matrix},
+                    details={"before_price_matrix": before_matrix, "after_price_matrix": new_matrix, "changes_detected": has_changes},
                 )
                 db.session.commit()
-                flash("Цены успешно сохранены!", "success")
+                if has_changes:
+                    flash("Цены успешно сохранены! Маршрут готов к экспорту.", "success")
+                else:
+                    flash("Изменений в ценах не обнаружено.", "secondary")
+                
                 return redirect(url_for("route_management.route_list"))
             else:
                 current_app.logger.error("DEBUG (PY): json.loads вернул не list, а %s", type(new_matrix))

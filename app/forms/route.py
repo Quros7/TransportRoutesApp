@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from flask_wtf import FlaskForm
-from wtforms import FieldList, FormField, HiddenField, SelectField, StringField, SubmitField
+from wtforms import DateField, FieldList, FormField, HiddenField, SelectField, StringField, SubmitField
 from wtforms.validators import DataRequired, Regexp, ValidationError, Length
 
 from app.constants import TRANSPORT_TYPE_CHOICES
@@ -13,6 +13,12 @@ from .tariff import TariffTableEntryForm
 
 # 1. Форма для Общей информации (Шаг 1)
 class RouteInfoForm(FlaskForm):
+    start_date = DateField(
+        "Дата начала действия", 
+        validators=[DataRequired(message="Укажите дату начала действия")],
+        format='%Y-%m-%d'
+    )
+    
     region_code = StringField(
         "Код региона (напр., 66)",
         validators=[DataRequired()],
@@ -78,6 +84,10 @@ class RouteInfoForm(FlaskForm):
         # Now validate with Pydantic
         try:
             # Convert form data to Pydantic model
+
+            # Конвертируем дату в формат YYMMDD
+            formatted_date = self.start_date.data.strftime("%y%m%d") if self.start_date.data else ""
+
             tariff_tables_data = [
                 {
                     "tariff_name": entry.form.tariff_name.data or "",
@@ -90,6 +100,7 @@ class RouteInfoForm(FlaskForm):
             ]
 
             route_data = {
+                "start_date": formatted_date,
                 "region_code": self.region_code.data,
                 "carrier_id": self.carrier_id.data,
                 "unit_id": self.unit_id.data,

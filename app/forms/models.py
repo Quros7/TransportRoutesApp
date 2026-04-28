@@ -117,6 +117,8 @@ class RouteInfoModel(BaseModel):
     route_number: str = Field(..., pattern=r"^[0-9a-zA-Zа-яА-Я/\-]{1,6}$")
     transport_type: str
     tariff_tables: list[TariffTableEntryModel] = Field(..., min_length=1, max_length=15)
+    start_date: str = Field(..., pattern=r"^\d{6}$")
+    updated_at: str = Field(default=None) # Техническая дата
 
     @field_validator("region_code")
     @classmethod
