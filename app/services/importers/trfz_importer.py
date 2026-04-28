@@ -1,3 +1,4 @@
+from datetime import datetime
 import uuid
 
 
@@ -28,8 +29,14 @@ class TRFZRouteImporter:
         if len(header) < 5:
             raise ValueError("Неверный заголовок TRFZ")
 
-        
+        # Множитель цены
         multiplier = 10**int(header[4])
+
+        # Дата начала действия (формат YYMMDD, 6-й элемент)
+        start_date_raw = header[3]
+        
+        # Генерируем дату изменения (текущее время в формате ISO)
+        current_now = datetime.now().isoformat()
 
         route_indices = [i for i, line in enumerate(self.lines) if line.startswith("R;")]
         all_routes = []
@@ -65,12 +72,15 @@ class TRFZRouteImporter:
                 # Генерируем уникальный ID для этой таблицы
                 new_uid = f"t{uuid.uuid4().hex[:8]}" 
                 ss_list = [c.strip() for c in parts[2:] if c.strip()]
+                ss_string = ";".join(ss_list) # Сохраняем строку кодов
                 
                 tariff_tables.append({
                     "uid": new_uid,
+                    "tab_number": idx,
                     "tariff_name": f"Тариф {idx}",
                     "table_type_code": parts[1],
-                    "ss_series_codes": ";".join(ss_list),
+                    "ss_series_codes": ss_string,
+                    "parsed_ss_codes_list": ss_list,
                 })
                 ordered_uids.append(str(new_uid))
 
@@ -107,6 +117,8 @@ class TRFZRouteImporter:
                     "route_number": r_line[1],
                     "route_name": r_line[4].strip(),
                     "transport_type": f"0x{r_line[2]}" if not r_line[2].startswith("0x") else r_line[2],
+                    "start_date": start_date_raw,
+                    "updated_at": current_now
                 },
                 "stops": stops,
                 "tariff_tables": tariff_tables,

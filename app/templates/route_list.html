@@ -133,7 +133,7 @@
                                 <td>
                                     {% if route.updated_at %}
                                         <span class="small" data-bs-toggle="tooltip" title="{{ " ".join(route.updated_at.split('.')[0].split('T')) }}">
-                                            {{ route.updated_at[:10] }}
+                                            {{ " ".join(route.updated_at.split('.')[0].split('T')) }}
                                         </span>
                                     {% else %}
                                         <span class="text-muted small">-</span>

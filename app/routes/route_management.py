@@ -201,6 +201,7 @@ def create_or_edit_route_info(route_id):
             for key, value in data_to_save.items():
                 if getattr(route, key) != value:
                     has_changes = True
+                    print("ИЗМЕНЕНИЯ:\n", "ДО:", getattr(route, key), "\nПосле:", value)
                     route.updated_at = datetime.now().isoformat() # Добавляем обновление даты правок
                     break
 
@@ -509,8 +510,8 @@ def edit_route_prices(route_id):
                 if has_changes:
                     flash("Цены успешно сохранены! Маршрут готов к экспорту.", "success")
                 else:
-                    flash("Изменений в ценах не обнаружено.", "secondary")
-                
+                    flash("Изменений в ценах не обнаружено. Маршрут готов к экспорту.", "secondary")
+
                 return redirect(url_for("route_management.route_list"))
             else:
                 current_app.logger.error("DEBUG (PY): json.loads вернул не list, а %s", type(new_matrix))
@@ -832,8 +833,11 @@ def import_route():
                         stops=data["stops"],
                         tariff_tables=data["tariff_tables"],
                         price_matrix=data["price_matrix"],
+                        start_date=valid.start_date,
+                        updated_at=valid.updated_at,
                         stops_set=True,
-                        is_completed=False,  # Ставим False, чтобы пользователь проверил цены после импорта
+                        is_completed=True,  # Ставим False, чтобы пользователь проверил цены после импорта 
+                                            # (True, потому что цены должны быть корректны сразу без проверки)
                     )
                     db.session.add(new_route)
                     db.session.flush()
@@ -854,91 +858,3 @@ def import_route():
             flash(f"Критическая ошибка файла: {str(e)}", "danger")
             
     return render_template("import_route.html", form=form)
-
-
-# # Временный тестовый маршрут
-# @bp.route("/route/import-excel", methods=["GET","POST"])
-# @login_required
-# def import_excel_route():
-#     # 1. Если просто открываем страницу
-#     if request.method == "GET":
-#         # Убедись, что этот шаблон существует, или используй общий для импорта
-#         return render_template("import_excel.html") 
-
-#     # 2. Обработка POST-запроса (загрузка файла)
-#     if "file" not in request.files:
-#         flash("Файл не найден в запросе", "danger")
-#         return redirect(request.url)
-    
-#     file = request.files["file"]
-#     if file.filename == "":
-#         flash("Файл не выбран", "danger")
-#         return redirect(request.url)
-    
-#     # ПРОВЕРКА ЧЕРЕЗ PYDANTIC
-#     try:
-#         file_contents = file.read()
-#         # Инициализируем наш новый сервис
-#         importer = ExcelRouteImporter(file_contents)
-#         data = importer.get_formatted_route_data()
-#         # Собираем payload для валидатора
-#         payload = {
-#             **data["route_info"],
-#             "tariff_tables": data["tariff_tables"]
-#         }
-#         validated_route = RouteInfoModel(**payload)
-        
-#         # 3. Создание объекта модели SQLAlchemy
-#         # Мы берем данные из validated_route (уже проверенные) и остальные части data
-#         # return jsonify({"status": "success", "data": data})
-#         new_route = Route(
-#             user_id=current_user.id,
-#             route_name=validated_route.route_name,
-#             route_number=validated_route.route_number,
-#             region_code=validated_route.region_code,
-#             carrier_id=validated_route.carrier_id,
-#             unit_id=validated_route.unit_id,
-#             transport_type=validated_route.transport_type,
-#             decimal_places=int(validated_route.decimal_places),
-
-#             # Данные из импортера
-#             stops=data["stops"],
-#             tariff_tables=data["tariff_tables"],
-#             price_matrix=data["price_matrix"],
-            
-#             # Флаги готовности
-#             stops_set=True,
-#             is_completed=True
-#         )   
-
-#         # 4. Сохранение в базу
-#         db.session.add(new_route)
-#         db.session.commit()
-        
-#         # 5. Логирование (для курсовой это важно!)
-#         log_action(
-#             action="route_excel_imported",
-#             entity_type="route",
-#             route_id=new_route.id,
-#             details={"filename": file.filename}
-#         )
-        
-#         flash(f"Маршрут '{new_route.route_name}' успешно импортирован!", "success")
-#         return redirect(url_for("route_management.route_list"))
-        
-#     except Exception as e:
-#         db.session.rollback()
-#         current_app.logger.error(f"Excel Import Error: {str(e)}")
-#         flash(f"Ошибка импорта: {str(e)}", "danger")
-#         return redirect(request.url)
-
-#     # Простая форма для загрузки, если зашли через GET
-#     return '''
-#         <!doctype html>
-#         <title>Test Excel Import</title>
-#         <h1>Загрузи XLS для теста парсера</h1>
-#         <form method=post enctype=multipart/form-data>
-#           <input type=file name=file>
-#           <input type=submit value=Upload>
-#         </form>
-#     '''

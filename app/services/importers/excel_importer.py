@@ -1,3 +1,4 @@
+from datetime import datetime
 import uuid
 
 import openpyxl
@@ -17,17 +18,27 @@ class ExcelRouteImporter:
     def get_route_info(self):
         """Парсинг основной шапки маршрута (строки 1-7)"""
         try:
+            # Читаем дату из ячейки (row=4, col=2)
+            raw_start_date = self.sheet.cell(row=4, column=2).value
+            
+            # Если openpyxl уже распознал это как datetime, приводим к строке или ISO
+            if isinstance(raw_start_date, datetime):
+                start_date_str = raw_start_date.strftime("%Y-%m-%d")
+            else:
+                start_date_str = str(raw_start_date)
+            
             # Используем метод cell(row, column) для точных координат
             data = {
                 "carrier_name": self.sheet.cell(row=1, column=2).value,
                 "carrier_id": str(self.sheet.cell(row=2, column=2).value).zfill(4),
                 "unit_id": str(self.sheet.cell(row=3, column=2).value).zfill(4),
-                "start_date": self.sheet.cell(row=4, column=2).value,
+                "start_date": start_date_str,
                 "route_name": self.sheet.cell(row=5, column=2).value,
                 "route_number": self.sheet.cell(row=6, column=2).value,
                 "transport_type": f"0x{self.sheet.cell(row=7, column=2).value}" 
                                 if self.sheet.cell(row=7, column=2).value else "0x01",
                 "region_code": str(66),
+                "updated_at": datetime.now().isoformat() # Генерируем время импорта
             }
             return data
         except Exception as e:
@@ -86,15 +97,18 @@ class ExcelRouteImporter:
             return None
 
         table_type_code = parts[1]
-        ss_codes = ";".join(parts[2:])
+        ss_codes_list = parts[2:] # Список кодов
+        ss_codes_str = ";".join(ss_codes_list)
 
         # Если ячейка с названием пустая, ставим дефолт
         final_name = str(tariff_name_val).strip() if tariff_name_val else f"Тариф {default_index}"
 
         return {
+            "tab_number": default_index,
             "tariff_name": final_name,
             "table_type_code": table_type_code,
-            "ss_series_codes": ss_codes,
+            "ss_series_codes": ss_codes_str,
+            "parsed_ss_codes_list": ss_codes_list,
             "start_row": row_idx
         }
     
@@ -203,20 +217,24 @@ class ExcelRouteImporter:
                 "region_code": str(info.get("region_code", "")),
                 "carrier_id": str(info.get("carrier_id", "")),
                 "unit_id": str(info.get("unit_id", "")),
-                "decimal_places": str(detected_places)
+                "decimal_places": str(detected_places),
             },
             "route_info": {
                 "route_number": str(info.get("route_number", "")),
                 "route_name": str(info.get("route_name", "")),
-                "transport_type": str(info.get("transport_type", "0x01"))
+                "transport_type": str(info.get("transport_type", "0x01")),
+                "start_date": info.get("start_date"),
+                "updated_at": info.get("updated_at"),
             },
             "stops": formatted_stops,
             "tariff_tables": [
                 {
                     "uid": t["uid"],
+                    "tab_number": t["tab_number"],
                     "tariff_name": t["tariff_name"],
                     "table_type_code": t["table_type_code"],
                     "ss_series_codes": t["ss_series_codes"],
+                    "parsed_ss_codes_list": t["parsed_ss_codes_list"],
                 } for t in raw["tariffs"]
             ],
             "price_matrix": self.build_final_matrix(raw)
