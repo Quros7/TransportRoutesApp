@@ -27,7 +27,7 @@
                         {% for stop in route.stops %}
                             {# Разрешаем отображение заголовка для Остановки 0 (индекс 0), если это городской маршрут. #}
                             {# {% if loop.index > 0 or is_city_route %} #}
-                            <th class="text-center">{{ stop.name }} ({{ loop.index0 }})</th>
+                            <th class="text-center align-top">({{ loop.index0 }}) <br> {{ stop.name }}</th>
                             {# {% endif %} #}
                         {% endfor %}
                     </tr>
@@ -42,7 +42,7 @@
                         {# {% set is_city_route = route.transport_type == '0x02' %} #}
                         {# {% if not loop.last or (is_city_route and loop.last) %} #}
                         <tr>
-                            <th scope="row" class="table-light">От: {{ start_stop.name }} ({{ i }})</th>
+                            <th scope="row" class="table-light">От: ({{ i }}) <br> {{ start_stop.name }}</th>
                             
                             {# j - Индекс конечной остановки (столбец) #}
                             {% for end_stop in route.stops %}
@@ -197,40 +197,51 @@
         if (event) event.preventDefault();
         
         const stopsCount = {{ route.stops | length }};
+        
+        // Собираем все уникальные ID тарифов, которые есть на странице
+        const allTariffIds = Array.from(new Set(
+            Array.from(document.querySelectorAll('.price-input'))
+                .map(input => input.getAttribute('data-tariff-id'))
+        ));
+
+        // Инициализируем матрицу нулями (симметрично импортеру)
         let matrix = [];
         for (let i = 0; i < stopsCount; i++) {
-            matrix[i] = new Array(stopsCount).fill(null);
+            matrix[i] = [];
+            for (let j = 0; j < stopsCount; j++) {
+                let defaultPrices = {};
+                allTariffIds.forEach(id => { defaultPrices[id] = 0.0; });
+                matrix[i][j] = defaultPrices;
+            }
         }
 
+        // 3. Находим все ячейки в DOM
         const cells = document.querySelectorAll('.price-matrix td[data-start-index]');
         
         cells.forEach(cell => {
             const i = parseInt(cell.getAttribute('data-start-index'));
             const j = parseInt(cell.getAttribute('data-end-index'));
-            let priceData = {};
             
             const inputs = cell.querySelectorAll('.price-input');
             inputs.forEach(input => {
                 const tariffId = input.getAttribute('data-tariff-id');
-                
                 let rawValue = input.value.trim().replace(',', '.');
                 
                 let numericValue = 0;
                 if (rawValue !== '') {
                     let parsed = parseFloat(rawValue);
                     if (!isNaN(parsed)) {
-                        // Округляем до 2 знаков, чтобы избежать проблем с точностью float
+                        // Округляем до 2 знаков
                         numericValue = Math.round(parsed * 100) / 100;
                     }
                 }
                 
-                priceData[tariffId] = numericValue;
+                // Записываем значение в уже существующий объект ячейки
+                matrix[i][j][tariffId] = numericValue;
                 
-                // Визуально обновляем инпут, чтобы пользователь видел, что сохранилось (с точкой)
-                input.value = numericValue.toFixed(2).replace('.', ','); // меняем обратно на запятую для красоты
-            });
-            
-            matrix[i][j] = priceData;
+                // Обновляем визуально для пользователя
+                input.value = numericValue.toFixed(2).replace('.', ',');
+                });
         });
 
         // Помещаем JSON в скрытое поле

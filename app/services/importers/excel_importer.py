@@ -166,9 +166,18 @@ class ExcelRouteImporter:
     
     def build_final_matrix(self, parsed_data):
         stops_count = len(parsed_data["stops"])
-        
-        # Создаем пустую матрицу
-        final_matrix = [[{} for _ in range(stops_count)] for _ in range(stops_count)]
+        # Собираем список всех UID тарифов, которые участвуют в импорте
+        all_tariff_uids = [t["uid"] for t in parsed_data["tariffs"]]
+
+        # Сразу инициализируем всю матрицу словарями с нулевыми ценами.
+        # Это обеспечит 100% совпадение со структурой JS.
+        final_matrix = [
+            [
+                {uid: 0.0 for uid in all_tariff_uids} 
+                for _ in range(stops_count)
+            ] 
+            for _ in range(stops_count)
+        ]
         
         for tariff in parsed_data["tariffs"]:
             tab_uid = tariff["uid"]
@@ -176,6 +185,7 @@ class ExcelRouteImporter:
             
             for row_idx, row_prices in enumerate(raw_matrix):
                 for col_idx, price in enumerate(row_prices):
+                    # Пропускаем пустые значения в Excel
                     if price is None or price == "":
                         continue
                         
@@ -184,14 +194,19 @@ class ExcelRouteImporter:
                         
                         # ЛОГИКА ТРАНСПОРНИРОВАНИЯ:
                         # В Excel TRFZ цена "Из А в Б" часто лежит в нижнем углу.
-                        # Чтобы она попала в верхний угол сайта (от меньшего индекса к большему),
-                        # мы берем координаты так, чтобы всегда записывать в [min][max].
+                        # Чтобы она попала в верхний угол матрицы цен (от меньшего индекса к большему),
+                        # берём координаты так, чтобы всегда записывать в [min][max].
                         
                         target_row = min(row_idx, col_idx)
                         target_col = max(row_idx, col_idx)
                         
-                        if target_row < stops_count and target_col < stops_count:
-                            final_matrix[target_row][target_col][tab_uid] = val
+                        # Если нашли хотя бы одну цену для этой ячейки, 
+                        # инициализируем её всеми ключами тарифов (нулями), если она была пустой
+                        if not final_matrix[target_row][target_col]:
+                            final_matrix[target_row][target_col] = {uid: 0.0 for uid in all_tariff_uids}
+                        
+                        # Записываем актуальное значение
+                        final_matrix[target_row][target_col][tab_uid] = val
                             
                     except (ValueError, TypeError):
                         continue
