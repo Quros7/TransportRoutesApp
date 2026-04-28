@@ -73,15 +73,13 @@
                 </div>
             </div>
 
-            <div class="table-responsive">
-                <table class="table table-striped table-hover align-middle">
+            <div class="table-responsive mt-3 border">
+                <table id="routesTable" class="table table-striped table-hover align-middle w-100">
                     <thead>
                         <tr>
-                            {# ИСПРАВЛЕНО: Добавлен label "Выбрать все" #}
-                            <th scope="col" >
-                                <div class="form-check d-flex align-items-center justify-content-between">
+                            <th scope="col" class="no-sort">
+                                <div class="form-check d-flex align-items-center">
                                     <input type="checkbox" id="select-all" class="form-check-input me-2">
-                                    {# <label class="form-check-label" for="select-all">Выбрать все</label> #}
                                 </div>
                             </th>
                             <th scope="col">№</th>
@@ -89,10 +87,14 @@
                             <th scope="col">Номер маршрута</th>
                             <th scope="col">Перевозчик (ID)</th>
                             <th scope="col">Тип транспорта</th>
+
+                            <th scope="col">Начало действия</th>
+                            <th scope="col">Изменен</th>
+
                             <th scope="col">Остановки</th>
                             <th scope="col">Тарифы</th>
                             <th scope="col">Статус</th> 
-                            <th scope="col" class="text-center" style="min-width: 250px;">Действия</th>
+                            <th scope="col" class="text-center no-sort" style="min-width: 250px;">Действия</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -104,13 +106,40 @@
                                 </td>
                                 <th scope="row">{{ loop.index }}</th>
                                 <td>
-                                    <strong>{{ route.route_name }}</strong>
+                                    {# <strong>{{ route.route_name }}</strong> #}
+                                    {{ route.route_name }}
                                 </td>
                                 <td>{{ route.route_number }}</td>
                                 <td>{{ route.carrier_id }}</td>
                                 <td>
-                                    {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
+                                    <span class="small">
+                                        {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
+                                    </span>
                                 </td>
+
+                                {# Дата начала действия (форматирование из YYMMDD в DD.MM.YY) #}
+                                <td>
+                                    {% if route.start_date and route.start_date|length == 6 %}
+                                        <span class="small">
+                                            {# {{ route.start_date[4:6] }}.{{ route.start_date[2:4] }}.{{ route.start_date[0:2] }} #}
+                                            {{ "20" + route.start_date[0:2] }}-{{ route.start_date[2:4] }}-{{ route.start_date[4:6] }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+
+                                {# Дата последнего изменения #}
+                                <td>
+                                    {% if route.updated_at %}
+                                        <span class="small" data-bs-toggle="tooltip" title="{{ " ".join(route.updated_at.split('.')[0].split('T')) }}">
+                                            {{ route.updated_at[:10] }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+
                                 <td class="text-center">
                                     {{ route.stops | length if route.stops else 0 }}
                                 </td>
@@ -128,7 +157,7 @@
                                     <div class="d-flex justify-content-center align-items-center">
                                         {# Кнопки действий #}
                                         <a href="{{ url_for('route_management.create_or_edit_route_info', route_id=route.id) }}" 
-                                        class="btn btn-sm btn-success me-2" 
+                                        class="btn btn-sm btn-success me-1" 
                                         data-bs-toggle="tooltip" title="Редактировать информацию">
                                             <i class="fas fa-edit"></i> Инфо
                                         </a>
@@ -136,14 +165,14 @@
                                         {% if route.stops_set %}
                                             <span data-bs-toggle="tooltip" title="Редактировать остановки">
                                                 <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
-                                                class="btn btn-sm btn-success me-2">
+                                                class="btn btn-sm btn-success me-1">
                                                     <i class="fas fa-map-marker-alt"></i> Остановки
                                                 </a>
                                             </span>
                                         {% else %}
                                             <span data-bs-toggle="tooltip" title="Редактировать остановки">
                                                 <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
-                                                class="btn btn-sm btn-outline-success me-2">
+                                                class="btn btn-sm btn-outline-success me-1">
                                                     <i class="fas fa-map-marker-alt"></i> Остановки
                                                 </a>
                                             </span>
@@ -153,21 +182,21 @@
                                             {% if route.is_completed %}
                                                 <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
                                                     <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
-                                                    class="btn btn-sm btn-success me-2">
+                                                    class="btn btn-sm btn-success me-1">
                                                         <i class="fas fa-dollar-sign"></i> Цены
                                                     </a>
                                                 </span>
                                             {% else %}
                                                 <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
                                                     <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
-                                                    class="btn btn-sm btn-outline-success me-2">
+                                                    class="btn btn-sm btn-outline-success me-1">
                                                         <i class="fas fa-dollar-sign"></i> Цены
                                                     </a>
                                                 </span>
                                             {% endif %}
                                         {% else %}
                                             <span data-bs-toggle="tooltip" title="Сначала укажите остановки!">
-                                                <a href="#" class="btn btn-sm btn-outline-success me-2 disabled" style="pointer-events: none;">
+                                                <a href="#" class="btn btn-sm btn-outline-success me-1 disabled" style="pointer-events: none;">
                                                     <i class="fas fa-dollar-sign"></i> Цены
                                                 </a>
                                             </span>
@@ -176,14 +205,14 @@
                                         {% if route.is_completed %}
                                             <span data-bs-toggle="tooltip" title="Скачать файл конфигурации">
                                                 <a href="{{ url_for('route_management.generate_config', route_id=route.id) }}" 
-                                                    class="btn btn-sm btn-primary me-2">
+                                                    class="btn btn-sm btn-primary me-1">
                                                     <i class="fas fa-download"></i> Конфиг
                                                 </a>
                                             </span>
                                         {% else %}
                                             <span data-bs-toggle="tooltip" title="Сначала заполните данные маршрута!">
                                                 <a href="{{ url_for('route_management.generate_config', route_id=route.id) }}" 
-                                                    class="btn btn-sm btn-primary me-2 disabled">
+                                                    class="btn btn-sm btn-primary me-1 disabled">
                                                     <i class="fas fa-download"></i> Конфиг
                                                 </a>
                                             </span>
@@ -222,34 +251,50 @@
       return new bootstrap.Tooltip(tooltipTriggerEl)
     })
 
-    document.addEventListener('DOMContentLoaded', function() {
+    $(document).ready(function() {
+        // 2. Инициализация DataTables
+        const table = $('#routesTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/ru.json"
+            },
+            "pageLength": 25,
+            "order": [[7, "desc"]], // По умолчанию сортируем по дате изменения
+            "columnDefs": [
+                { "targets": "no-sort", "orderable": false } // Отключаем сортировку для чекбоксов и действий
+            ],
+            "stateSave": true, // Сохраняем состояние фильтров и сортировки
+            "drawCallback": function() {
+                // Инициализируем тултипы для новых отрисованных строк
+                var api = this.api();
+                $(api.table().container()).find('[data-bs-toggle="tooltip"]').each(function() {
+                    new bootstrap.Tooltip(this);
+                });
+            }
+        });
+
         const selectAll = document.getElementById('select-all');
-        const checkboxes = document.querySelectorAll('.route-checkbox');
         const countDisplay = document.getElementById('selected-count-display');
-        
-        // Две кнопки
         const bulkGenBtn = document.getElementById('bulk-generate-btn');
         const bulkDelBtn = document.getElementById('bulk-delete-btn');
-        
-        const totalCheckboxes = checkboxes.length;
 
+        // 3. Функция обновления счетчика и состояния кнопок
         function updateCount() {
-            let checkedCount = 0;
-            checkboxes.forEach(checkbox => {
-                if (checkbox.checked) {
-                    checkedCount++;
-                }
-            });
+            // Используем table.$() чтобы найти чекбоксы на всех страницах пагинации
+            const allCheckboxes = table.$('.route-checkbox');
+            const checkedCheckboxes = table.$('.route-checkbox:checked');
             
-            // 1. Обновление текстового счетчика
+            let checkedCount = checkedCheckboxes.length;
+            let totalCount = allCheckboxes.length;
+            
+            // Обновление текстового счетчика
             countDisplay.textContent = `Выбрано: ${checkedCount}`;
 
-            // 2. Логика для кнопки УДАЛЕНИЯ (без лимита в 10 штук)
+            // Логика для кнопки УДАЛЕНИЯ
             if (bulkDelBtn) {
                 bulkDelBtn.disabled = (checkedCount === 0);
             }
 
-            // 3. Логика для кнопки ГЕНЕРАЦИИ (с лимитом 10)
+            // Логика для кнопки ГЕНЕРАЦИИ (лимит 10)
             if (bulkGenBtn) {
                 if (checkedCount > 10) {
                     countDisplay.classList.add('text-danger', 'fw-bold');
@@ -260,33 +305,43 @@
                 }
             }
 
-            // 4. Синхронизация главного чекбокса "Выбрать все"
-            if (checkedCount === totalCheckboxes && totalCheckboxes > 0) {
-                selectAll.checked = true;
-                selectAll.indeterminate = false;
-            } else if (checkedCount > 0) {
-                selectAll.checked = false;
-                selectAll.indeterminate = true;
-            } else {
-                selectAll.checked = false;
-                selectAll.indeterminate = false;
+            // Синхронизация главного чекбокса "Выбрать все"
+            if (selectAll) {
+                if (checkedCount === totalCount && totalCount > 0) {
+                    selectAll.checked = true;
+                    selectAll.indeterminate = false;
+                } else if (checkedCount > 0) {
+                    selectAll.checked = false;
+                    selectAll.indeterminate = true;
+                } else {
+                    selectAll.checked = false;
+                    selectAll.indeterminate = false;
+                }
             }
         }
 
-        // Обработчик "Выбрать все"
+        // 4. Сброс чекбоксов при сортировке (ваше требование)
+        table.on('order.dt', function() {
+            table.$('.route-checkbox').prop('checked', false);
+            if (selectAll) selectAll.checked = false;
+            if (selectAll) selectAll.indeterminate = false;
+            updateCount();
+        });
+
+        // 5. Обработчик "Выбрать все" (с учетом всех страниц пагинации)
         if (selectAll) {
             selectAll.addEventListener('change', function() {
                 const isChecked = this.checked;
-                checkboxes.forEach(checkbox => {
-                    checkbox.checked = isChecked;
-                });
+                // Применяем ко всем строкам, которые соответствуют текущему фильтру поиска
+                table.$('.route-checkbox', { "filter": "applied" }).prop('checked', isChecked);
                 updateCount(); 
             });
         }
 
-        // Обработчики индивидуальных чекбоксов
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', updateCount); 
+        // 6. Делегирование событий для индивидуальных чекбоксов
+        // Используем jQuery .on() на теле таблицы, чтобы события ловились после смены страниц
+        $('#routesTable tbody').on('change', '.route-checkbox', function() {
+            updateCount();
         });
 
         // Первоначальный запуск

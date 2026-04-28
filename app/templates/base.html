@@ -9,6 +9,8 @@
           rel="stylesheet" 
           integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" 
           crossorigin="anonymous">
+    {# DataTables #}
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     {# Иконки Font Awesome #}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     {# Собственный style.css файл #}
@@ -54,7 +56,7 @@
                         <li class="nav-item">
                             <a class="btn btn-outline-light me-2" href="{{ url_for('auth.login') }}">Войти</a>
                         </li>
-                        {# Здесь можно добавить ссылку на регистрацию, если она у вас есть #}
+                        {# Здесь можно добавить ссылку на регистрацию, если она есть #}
                     {% else %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -72,7 +74,7 @@
         </div>
     </nav>
     
-    <div class="container mt-4">
+    <div class="container mt-4" style="max-width: 100%;">
         {# 3. Вывод Flash-сообщений в стиле Bootstrap #}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -92,12 +94,17 @@
     </div> 
     {# здесь был скрипт bootstrap #}
 
-    {# 6. Блок для вставки вашего JavaScript кода #}
+    {# Блок для вставки JavaScript кода #}
     {% block scripts %}
-        {# 5. Bootstrap JS (обязательно для Navbar, Dropdowns, Modals и т.д.) #}
+        {# Bootstrap JS (для Navbar, Dropdowns, Modals и т.д.) #}
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" 
                 integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" 
                 crossorigin="anonymous"></script>
+        
+        <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+        <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+        <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
         <script>
             // Универсальная функция для переключения видимости пароля
             function togglePasswordVisibility(fieldId, button) {
