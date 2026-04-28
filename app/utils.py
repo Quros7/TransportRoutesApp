@@ -51,14 +51,14 @@ def write_route_body_to_buffer(buffer, route, decimal_places_for_config):
     # ==========================================
     # 4. ТАРИФНЫЕ ТАБЛИЦЫ (Tabs)
     # ==========================================
-    for table in route.tariff_tables:
-        tab_n = table["tab_number"]
+    for idx, table in enumerate(route.tariff_tables):
+        tab_n = idx + 1
         type_code = table['table_type_code']
         # ss_codes = table["ss_series_codes"]
         ss_codes = table.get("ss_series_codes", "")
 
         if ss_codes:
-            # Убеждаемся, что нет двойных ;; и пустых элементов
+            # Очистка: убираем пробелы и пустые точки с запятой
             clean_ss = ";".join([c.strip() for c in ss_codes.split(";") if c.strip()])
             t_line = f"{tab_n};{type_code};{clean_ss}"
         else:
@@ -81,10 +81,10 @@ def write_route_body_to_buffer(buffer, route, decimal_places_for_config):
             if j >= i:
                 prices_list = []
                 for table in route.tariff_tables:
-                    tab_id_str = str(table["tab_number"])
-                    try:
-                        raw_price = route.price_matrix[i][j].get(tab_id_str, 0)
+                    tab_uid = str(table["uid"])
 
+                    try:
+                        raw_price = route.price_matrix[i][j].get(tab_uid, 0)
                         # ПРЕОБРАЗОВАНИЕ В ЦЕЛОЕ ЧИСЛО С УЧЕТОМ НОВОГО МНОЖИТЕЛЯ
                         price_int = int(float(raw_price) * multiplier)
                         prices_list.append(str(price_int))

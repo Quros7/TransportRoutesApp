@@ -1,3 +1,5 @@
+import uuid
+
 import openpyxl
 from io import BytesIO
 from decimal import Decimal
@@ -31,15 +33,6 @@ class ExcelRouteImporter:
         except Exception as e:
             return {"error": f"Ошибка парсинга шапки: {str(e)}"}
     
-    # def find_tariff_blocks(self):
-    #     """Находит номера строк, где начинаются тарифные таблицы"""
-    #     blocks = []
-    #     for row in range(1, self.sheet.max_row + 1):
-    #         val = self.sheet.cell(row=row, column=1).value
-    #         if val and "Набор серий" in str(val):
-    #             blocks.append(row)
-    #     return blocks
-    
     def get_full_data(self):
         route_info = self.get_route_info()
         tariff_blocks = []
@@ -53,11 +46,15 @@ class ExcelRouteImporter:
                 raw_blocks.append(row_idx)
         
         for i, start_row in enumerate(raw_blocks):
+            # Генерируем UID, чтобы связать его с матрицей
+            new_uid = f"t{uuid.uuid4().hex[:8]}"
+
             # Передаем только номер строки
-            header = self._extract_tariff_header(start_row)
+            header = self._extract_tariff_header(start_row, i+1)
             if not header:
                 continue
             
+            header["uid"] = new_uid
             stops, matrix = self._parse_matrix_data(start_row)
             
             if i == 0:
@@ -72,7 +69,7 @@ class ExcelRouteImporter:
             "tariffs": tariff_blocks
         }
 
-    def _extract_tariff_header(self, row_idx):
+    def _extract_tariff_header(self, row_idx, default_index):
         """
         Извлекает данные тарифа: 
         A: Ключевое слово (Набор серий)
@@ -88,15 +85,13 @@ class ExcelRouteImporter:
         if len(parts) < 2:
             return None
 
-        tab_number = int(parts[0])
         table_type_code = parts[1]
         ss_codes = ";".join(parts[2:])
 
         # Если ячейка с названием пустая, ставим дефолт
-        final_name = str(tariff_name_val).strip() if tariff_name_val else f"Тариф {tab_number}"
+        final_name = str(tariff_name_val).strip() if tariff_name_val else f"Тариф {default_index}"
 
         return {
-            "tab_number": tab_number,
             "tariff_name": final_name,
             "table_type_code": table_type_code,
             "ss_series_codes": ss_codes,
@@ -161,7 +156,7 @@ class ExcelRouteImporter:
         final_matrix = [[{} for _ in range(stops_count)] for _ in range(stops_count)]
         
         for tariff in parsed_data["tariffs"]:
-            tab_id = str(tariff["tab_number"])
+            tab_uid = tariff["uid"]
             raw_matrix = tariff["matrix"]
             
             for row_idx, row_prices in enumerate(raw_matrix):
@@ -181,7 +176,7 @@ class ExcelRouteImporter:
                         target_col = max(row_idx, col_idx)
                         
                         if target_row < stops_count and target_col < stops_count:
-                            final_matrix[target_row][target_col][tab_id] = val
+                            final_matrix[target_row][target_col][tab_uid] = val
                             
                     except (ValueError, TypeError):
                         continue
@@ -218,7 +213,7 @@ class ExcelRouteImporter:
             "stops": formatted_stops,
             "tariff_tables": [
                 {
-                    "tab_number": t["tab_number"],
+                    "uid": t["uid"],
                     "tariff_name": t["tariff_name"],
                     "table_type_code": t["table_type_code"],
                     "ss_series_codes": t["ss_series_codes"],

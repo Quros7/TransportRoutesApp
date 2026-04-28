@@ -1,3 +1,6 @@
+import uuid
+
+
 class TRFZRouteImporter:
     def __init__(self, raw_data):
         self.raw_data = raw_data
@@ -52,20 +55,24 @@ class TRFZRouteImporter:
             tabs_start = 1 + zones_count
             tab_lines = block[tabs_start : tabs_start + tabs_count]
             tariff_tables = []
-            tab_ids = []
+            # Список UID в порядке их следования в файле для сопоставления с матрицей
+            ordered_uids = []
 
             for idx, tl in enumerate(tab_lines, start=1):
                 parts = tl.split(";")
                 if len(parts) < 2: continue
-                tab_no = int(parts[0])
+
+                # Генерируем уникальный ID для этой таблицы
+                new_uid = f"t{uuid.uuid4().hex[:8]}" 
                 ss_list = [c.strip() for c in parts[2:] if c.strip()]
+                
                 tariff_tables.append({
-                    "tab_number": tab_no,
+                    "uid": new_uid,
                     "tariff_name": f"Тариф {idx}",
                     "table_type_code": parts[1],
                     "ss_series_codes": ";".join(ss_list),
                 })
-                tab_ids.append(str(tab_no))
+                ordered_uids.append(str(new_uid))
 
             # Парсим матрицу
             matrix = [[{} for _ in range(zones_count)] for _ in range(zones_count)]
@@ -76,8 +83,14 @@ class TRFZRouteImporter:
                 try:
                     r_idx, c_idx = int(parts[0]), int(parts[1])
                     prices = parts[2:]
-                    cell_data = {tab_ids[p_idx]: float(p_val)/multiplier 
-                                 for p_idx, p_val in enumerate(prices) if p_idx < len(tab_ids)}
+
+                    # Сопоставляем цену из колонки с соответствующим UID из списка ordered_uids
+                    cell_data = {}
+                    for p_idx, p_val in enumerate(prices):
+                        if p_idx < len(ordered_uids):
+                            target_uid = ordered_uids[p_idx]
+                            cell_data[target_uid] = float(p_val) / multiplier
+                    
                     if r_idx < zones_count and c_idx < zones_count:
                         matrix[r_idx][c_idx] = cell_data
                 except: continue
