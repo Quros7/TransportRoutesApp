@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('route_management.route_list') }}">Маршруты</a></li>
+            <li class="breadcrumb-item active">Порядок экспорта</li>
+        </ol>
+    </nav>
+
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Настройка порядка маршрутов в TRFZ</h4>
+        </div>
+        <div class="card-body">
+            <div class="text-muted text-truncate">Код региона: {{ header_data.region_code }}</div>
+            <div class="text-muted text-truncate">ID перевозчика: {{ header_data.carrier_id }}</div>
+            <div class="text-muted text-truncate">ID подразделения: {{ header_data.unit_id }}</div>
+            <div class="text-muted text-truncate">Кол-во знаков после запятой (для цен): {{ header_data.decimal_places }}</div>
+
+            <p class="mt-2">Перетащите маршруты мышкой, чтобы установить нужный порядок следования в TRFZ-файле.</p>
+            
+            <form action="{{ url_for('route_management.generate_bulk_config') }}" method="POST">
+                {{ bulk_form.csrf_token }}
+
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <label for="start_date" class="form-label fw-bold">Дата начала действия<br>(для шапки и имени TRFZ-файла):</label>
+                        <input type="date" name="start_date" id="start_date" 
+                            class="form-control" 
+                            value="{{ bulk_form.start_date.data.strftime('%Y-%m-%d') if bulk_form.start_date.data else '' }}" 
+                            required>
+                    </div>
+                </div>
+                
+                {# Скрытые поля с данными шапки, чтобы не потерять их #}
+                <input type="hidden" name="region_code" value="{{ header_data.region_code }}">
+                <input type="hidden" name="carrier_id" value="{{ header_data.carrier_id }}">
+                <input type="hidden" name="unit_id" value="{{ header_data.unit_id }}">
+                <input type="hidden" name="decimal_places" value="{{ header_data.decimal_places }}">
+
+                <ul id="sortable-list" class="list-group mb-4">
+                    {% for route in routes %}
+                    <li class="list-group-item d-flex align-items-center bg-light mb-2 border rounded p-2" style="cursor: grab;">
+                        <input type="hidden" name="ordered_ids" value="{{ route.id }}">
+                        
+                        <div style="width: 40px;" class="text-center">
+                            <i class="fas fa-grip-lines text-secondary"></i>
+                        </div>
+
+                        <div style="width: 80px;" class="ms-1">
+                            <span class="badge bg-secondary w-100">№ {{ route.route_number }}</span>
+                        </div>
+
+                        <div class="ms-3 flex-grow-1 fw-bold text-truncate">
+                            {{ route.route_name }}
+                        </div>
+
+                        <div class="ms-3 text-truncate">
+                            {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
+                        </div>
+
+                        <div style="width: 150px;" class="ms-3 text-muted small border-start ps-3">
+                            Начало действия: {{ "20" + route.start_date[0:2] }}-{{ route.start_date[2:4] }}-{{ route.start_date[4:6] }}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('route_management.route_list') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Назад
+                    </a>
+                    <button type="submit" class="btn btn-success px-4">
+                        <i class="fas fa-file-export"></i> Сформировать файл TRFZ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Подключаем библиотеку для перетаскивания #}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+    console.log("Token check:", "{{ csrf_token }}");
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var el = document.getElementById('sortable-list');
+        Sortable.create(el, {
+            animation: 150,
+            ghostClass: 'bg-info',
+            onEnd: function() {
+                console.log('Порядок изменен');
+            }
+        });
+    });
+</script>
+{% endblock %}

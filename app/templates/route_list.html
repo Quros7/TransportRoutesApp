@@ -19,7 +19,7 @@
         </div>
     {% else %}
         {# НАЧАЛО ФОРМЫ ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ #}
-        <form method="POST" action="{{ url_for('route_management.generate_bulk_config') }}" id="bulk-generate-form">
+        <form method="POST" action="{{ url_for('route_management.sort_bulk_routes') }}" id="bulk-generate-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
             {# Панель массовых действий: Кнопка генерации + Поля шапки #}
@@ -121,7 +121,6 @@
                                 <td>
                                     {% if route.start_date and route.start_date|length == 6 %}
                                         <span class="small">
-                                            {# {{ route.start_date[4:6] }}.{{ route.start_date[2:4] }}.{{ route.start_date[0:2] }} #}
                                             {{ "20" + route.start_date[0:2] }}-{{ route.start_date[2:4] }}-{{ route.start_date[4:6] }}
                                         </span>
                                     {% else %}
@@ -255,7 +254,25 @@
         // 2. Инициализация DataTables
         const table = $('#routesTable').DataTable({
             "language": {
-                "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/ru.json"
+                "processing": "Подождите...",
+                "search": "Поиск:",
+                "lengthMenu": "Показать _MENU_ записей",
+                "info": "Записи с _START_ до _END_ из _TOTAL_ записей",
+                "infoEmpty": "Записи с 0 до 0 из 0 записей",
+                "infoFiltered": "(отфильтровано из _MAX_ записей)",
+                "loadingRecords": "Загрузка записей...",
+                "zeroRecords": "Записи отсутствуют.",
+                "emptyTable": "В таблице отсутствуют данные",
+                "paginate": {
+                    "first": "Первая",
+                    "previous": "Предыдущая",
+                    "next": "Следующая",
+                    "last": "Последняя"
+                },
+                "aria": {
+                    "sortAscending": ": активировать для сортировки столбца по возрастанию",
+                    "sortDescending": ": активировать для сортировки столбца по убыванию"
+                }
             },
             "pageLength": 25,
             "order": [[7, "desc"]], // По умолчанию сортируем по дате изменения

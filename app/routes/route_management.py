@@ -649,6 +649,7 @@ def generate_config(route_id):
     buffer = io.BytesIO()
 
     try:
+        start_date = str(route.start_date)
         current_date = datetime.now().strftime("%y%m%d")
         current_time = datetime.now().strftime("%H%M%S")
         # ==========================================
@@ -677,7 +678,7 @@ def generate_config(route_id):
         buffer.seek(0)
 
         # Формируем имя файла (Код региона_ID Перевозчика_ID Подразделения_Название маршрута_Дата)
-        filename = f"{route.region_code}_{route.carrier_id}_{route.unit_id}_TRFZ_{current_date}_{current_time}"
+        filename = f"{route.region_code}_{route.carrier_id}_{route.unit_id}_TRFZ_start-date-{start_date}_saved-at-{current_date}_{current_time}"
         log_action(
             action="route_config_generated",
             entity_type="route",
@@ -697,20 +698,26 @@ def generate_config(route_id):
 @bp.route("/routes/generate_bulk_config", methods=["POST"])
 @login_required
 def generate_bulk_config():
-    # 1. Получаем список ID выбранных маршрутов из формы
-    # В HTML чекбоксы будут иметь name="route_ids"
-    route_ids = request.form.getlist("route_ids")
+    # Получаем ordered_ids — это ID в порядке, установленном пользователем
+    route_ids = request.form.getlist("ordered_ids")
+
+    if not route_ids:
+        flash("Список маршрутов пуст.", "warning")
+        return redirect(url_for("route_management.route_list"))
 
     # Лимит 10 маршрутов
     if len(route_ids) > 10:
         flash("Ошибка: В один файл можно включить не более 10 маршрутов.", "danger")
         return redirect(url_for("route_management.route_list"))
-
-    # 2. Инициализируем и валидируем форму шапки
+    
+    # Инициализируем и валидируем форму шапки
     # Если форма не пройдет валидацию, мы не сможем получить ее данные (data)
     bulk_form = BulkGenerateForm(request.form)
 
     if not bulk_form.validate():
+        print(f"DEBUG: Ошибки формы: {bulk_form.errors}")
+        print(f"DEBUG: CSRF в форме: {bulk_form.csrf_token.data}")
+        print(f"DEBUG: CSRF в запросе: {request.form.get('csrf_token')}")
         # Если валидация не удалась, мы не можем сгенерировать файл.
         # Сохраняем сообщение об ошибке (например, для первой ошибки)
         first_error = next(iter(bulk_form.errors.values()))[0]
@@ -718,77 +725,93 @@ def generate_bulk_config():
 
         # Перенаправляем обратно на список маршрутов (GET)
         return redirect(url_for("route_management.route_list"))
+    
+    # Получаем дату из формы
+    selected_date = bulk_form.start_date.data # Это объект datetime.date
+    header_date_str = selected_date.strftime("%y%m%d") # Формат YYMMDD для внутри файла
+    file_date_str = selected_date.strftime("%Y-%m-%d") # Формат для имени файла
+
+    # Данные шапки берем из скрытых полей страницы сортировки
+    region_code = request.form.get("region_code")
+    carrier_id = request.form.get("carrier_id")
+    unit_id = request.form.get("unit_id")
+    decimal_places = request.form.get("decimal_places")
+
+    # Загружаем маршруты
+    query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
+    routes_from_db = db.session.scalars(query).all()
+
+    # Выстраиваем маршруты в точном порядке из route_ids (от SortableJS)
+    routes_dict = {str(r.id): r for r in routes_from_db}
+    ordered_routes = [routes_dict[rid] for rid in route_ids if rid in routes_dict]
+
+    if not ordered_routes:
+        flash("Ошибка: маршруты не найдены.", "danger")
+        return redirect(url_for("route_management.route_list"))
 
     if not route_ids:
         flash("Не выбрано ни одного маршрута.", "warning")
         return redirect(url_for("route_management.route_list"))
-
-    # 3. Загружаем маршруты из БД (проверяя, что они принадлежат user_id)
-    # Используем .in_(route_ids) для фильтрации
-    query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
-    routes = db.session.scalars(query).all()
-
-    if not routes:
-        flash("Маршруты не найдены.", "danger")
-        return redirect(url_for("route_management.route_list"))
-
-    # 4. Валидация: Проверяем флаг is_completed
-    incomplete_routes = [r.route_name for r in routes if not r.is_completed]
-
-    if incomplete_routes:
-        flash(
-            f"Ошибка! Следующие маршруты не заполнены до конца: {', '.join(incomplete_routes)}. Заполните их перед генерацией.",
-            "danger",
-        )
-        return redirect(url_for("route_management.route_list"))
-
-    # Получаем значение точности цен из формы для использования в шапке и теле
-    decimal_places_value = bulk_form.decimal_places.data  # Значение V (0, 1 или 2)
-
-    # 5. Генерация файла
+    
     buffer = io.BytesIO()
-
-    # Вспомогательная функция для записи одной строки (для шапки)
     def write_line(text):
         buffer.write((text + "\r\n").encode("cp866", errors="replace"))
 
     try:
-        # --- ШАПКА ФАЙЛА (Берем данные из bulk_form.data) ---
         current_date = datetime.now().strftime("%y%m%d")
         current_time = datetime.now().strftime("%H%M%S")
-
-        # ИСПОЛЬЗУЕМ ДАННЫЕ ИЗ ФОРМЫ (ОНИ УЖЕ ОТФИЛЬТРОВАНЫ и ВАЛИДИРОВАНЫ)
-        rr = bulk_form.region_code.data
-        tttt = bulk_form.carrier_id.data
-        dddd = bulk_form.unit_id.data
-        v = decimal_places_value
-
-        header_line = f"{rr};{tttt};{dddd};{current_date};{v}"
+        
+        # Шапка
+        header_line = f"{region_code};{carrier_id};{unit_id};{header_date_str};{decimal_places}"
         write_line(header_line)
 
-        # --- ТЕЛА МАРШРУТОВ ---
-        for route in routes:
-            # Используем нашу функцию рефакторинга
-            write_route_body_to_buffer(buffer, route, decimal_places_value)
+        # ТЕЛА МАРШРУТОВ (в нужном порядке)
+        for route in ordered_routes:
+            write_route_body_to_buffer(buffer, route, decimal_places)
 
-        # --- ОТПРАВКА ---
         buffer.seek(0)
-        # Формируем имя файла (Код региона_ID Перевозчика_ID Подразделения_Название маршрута_Дата)
-        filename = f"{rr}_{tttt}_{dddd}_TRFZ_({len(routes)}routes)_{current_date}_{current_time}"
-        # filename = f"TRFZ_BULK_{current_date}_({len(routes)}routes).txt"
-        log_action(
-            action="routes_bulk_config_generated",
-            entity_type="route",
-            details={"filename": filename, "route_ids": [route.id for route in routes]},
-        )
-        db.session.commit()
-
+        filename = f"{region_code}_{carrier_id}_{unit_id}_TRFZ_start-date-{file_date_str}_saved-{current_date}-at-{current_time}_({len(ordered_routes)}-routes)"
+        
         return send_file(buffer, as_attachment=True, download_name=filename, mimetype="text/plain")
-
+    
     except Exception as e:
-        print(f"Error generating bulk config: {e}")
-        flash(f"Ошибка при генерации файла: {e}", "danger")
+        flash(f"Ошибка: {e}", "danger")
         return redirect(url_for("route_management.route_list"))
+
+
+# Промежуточный путь для сортировки выбранных маршрутов (порядок в TRFZ)
+@bp.route("/routes/sort_bulk_routes", methods=["POST"])
+@login_required
+def sort_bulk_routes():
+    route_ids = request.form.getlist("route_ids")
+    
+    if not route_ids or len(route_ids) > 10:
+        flash("Выберите от 1 до 10 маршрутов.", "warning")
+        return redirect(url_for("route_management.route_list"))
+    
+    # Создаем экземпляр формы из пришедших данных
+    bulk_form = BulkGenerateForm(request.form)
+
+    # Собираем данные шапки, чтобы передать их дальше
+    header_data = {
+        'region_code': request.form.get('region_code'),
+        'carrier_id': request.form.get('carrier_id'),
+        'unit_id': request.form.get('unit_id'),
+        'decimal_places': request.form.get('decimal_places')
+    }
+
+    # Загружаем объекты маршрутов для отображения имен на странице сортировки
+    query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
+    routes = db.session.scalars(query).all()
+    
+    # Сортируем их в том порядке, в котором они пришли изначально (для дефолта)
+    routes_dict = {str(r.id): r for r in routes}
+    sorted_routes = [routes_dict[rid] for rid in route_ids if rid in routes_dict]
+
+    return render_template("sort_bulk_routes.html", 
+                           routes=sorted_routes, 
+                           header_data=header_data,
+                           bulk_form=bulk_form)
 
 
 # Импорт маршрута (Полная версия: TRFZ + Excel)
