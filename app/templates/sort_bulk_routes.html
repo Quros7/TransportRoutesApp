@@ -39,10 +39,39 @@
                 <input type="hidden" name="carrier_id" value="{{ header_data.carrier_id }}">
                 <input type="hidden" name="unit_id" value="{{ header_data.unit_id }}">
                 <input type="hidden" name="decimal_places" value="{{ header_data.decimal_places }}">
+                
+                <div class="mb-3">
+                    <label class="form-label d-block fw-bold text-muted small uppercase">Автоматическая сортировка:</label>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-primary" onclick="autoSort('number', 'asc')">
+                            <i class="fas"></i> По номеру (↓)
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="autoSort('number', 'desc')">
+                            <i class="fas"></i> По номеру (↑)
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="autoSort('type', 'asc')">
+                            <i class="fas fa-bus"></i> По типу (↓)
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="autoSort('type', 'desc')">
+                            <i class="fas fa-bus"></i> По типу (↑)
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="autoSort('date', 'asc')">
+                            <i class="fas fa-calendar-alt"></i> По дате начала (↓)
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="autoSort('date', 'desc')">
+                            <i class="fas fa-calendar-alt"></i> По дате начала (↑)
+                        </button>
+                    </div>
+                </div>
 
                 <ul id="sortable-list" class="list-group mb-4">
                     {% for route in routes %}
-                    <li class="list-group-item d-flex align-items-center bg-light mb-2 border rounded p-2" style="cursor: grab;">
+                    <li class="list-group-item d-flex align-items-center bg-light mb-2 border rounded p-2 sort-item" 
+                            style="cursor: grab;"
+                            data-number="{{ route.route_number }}"
+                            data-type="{{ route.transport_type }}"
+                            data-date="{{ route.start_date }}">
+
                         <input type="hidden" name="ordered_ids" value="{{ route.id }}">
                         
                         <div style="width: 40px;" class="text-center">
@@ -84,8 +113,6 @@
 {# Подключаем библиотеку для перетаскивания #}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
-    console.log("Token check:", "{{ csrf_token }}");
-
     document.addEventListener('DOMContentLoaded', function() {
         var el = document.getElementById('sortable-list');
         Sortable.create(el, {
@@ -96,5 +123,33 @@
             }
         });
     });
+
+    function autoSort(criteria, order) {
+        const list = document.getElementById('sortable-list');
+        const items = Array.from(list.getElementsByClassName('sort-item'));
+
+        items.sort((a, b) => {
+            let valA = a.getAttribute(`data-${criteria}`);
+            let valB = b.getAttribute(`data-${criteria}`);
+
+            // Логика для числовой сортировки (номер маршрута)
+            if (criteria === 'number') {
+                // Используем умное сравнение строк с поддержкой чисел
+                // Это корректно обработает 101, 101/1, 101/2 и т.д.
+                return order === 'asc' 
+                    ? valA.localeCompare(valB, undefined, {numeric: true, sensitivity: 'base'})
+                    : valB.localeCompare(valA, undefined, {numeric: true, sensitivity: 'base'});
+            }
+
+            // Логика для строк (тип и дата в формате YYMMDD)
+            if (valA < valB) return order === 'asc' ? -1 : 1;
+            if (valA > valB) return order === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        // Очищаем список и добавляем отсортированные элементы
+        // SortableJS подхватит новый порядок автоматически
+        items.forEach(item => list.appendChild(item));
+    }
 </script>
 {% endblock %}
