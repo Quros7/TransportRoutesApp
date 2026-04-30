@@ -62,7 +62,7 @@
                             id="bulk-delete-btn" 
                             disabled
                             formaction="{{ url_for('route_management.delete_bulk_routes') }}"
-                            onclick="return confirm('Вы уверены, что хотите БЕЗВОЗВРАТНО удалить все выбранные маршруты?');">
+                            {# onclick="return confirm('Вы уверены, что хотите БЕЗВОЗВРАТНО удалить все выбранные маршруты?');" #} > 
                         <i class="fas fa-trash-alt"></i> Удалить выбранные
                     </button>
 
@@ -102,7 +102,7 @@
                             <tr>
                                 <td>
                                     {# Элемент для отправки ID на сервер #}
-                                    <input type="checkbox" name="route_ids" value="{{ route.id }}" class="form-check-input route-checkbox">
+                                    <input type="checkbox" value="{{ route.id }}" class="form-check-input route-checkbox">
                                 </td>
                                 <th scope="row">{{ loop.index }}</th>
                                 <td>
@@ -251,7 +251,7 @@
     })
 
     $(document).ready(function() {
-        // 2. Инициализация DataTables
+        // Инициализация DataTables
         const table = $('#routesTable').DataTable({
             "language": {
                 "processing": "Подождите...",
@@ -275,11 +275,11 @@
                 }
             },
             "pageLength": 25,
-            "order": [[7, "desc"]], // По умолчанию сортируем по дате изменения
+            "order": [[0, "asc"]], // По умолчанию сортируем по дате изменения
             "columnDefs": [
                 { "targets": "no-sort", "orderable": false } // Отключаем сортировку для чекбоксов и действий
             ],
-            "stateSave": true, // Сохраняем состояние фильтров и сортировки
+            "stateSave": false, // Состояние фильтров и сортировки
             "drawCallback": function() {
                 // Инициализируем тултипы для новых отрисованных строк
                 var api = this.api();
@@ -294,7 +294,7 @@
         const bulkGenBtn = document.getElementById('bulk-generate-btn');
         const bulkDelBtn = document.getElementById('bulk-delete-btn');
 
-        // 3. Функция обновления счетчика и состояния кнопок
+        // Функция обновления счетчика и состояния кнопок
         function updateCount() {
             // Используем table.$() чтобы найти чекбоксы на всех страницах пагинации
             const allCheckboxes = table.$('.route-checkbox');
@@ -337,15 +337,15 @@
             }
         }
 
-        // 4. Сброс чекбоксов при сортировке (ваше требование)
-        table.on('order.dt', function() {
-            table.$('.route-checkbox').prop('checked', false);
-            if (selectAll) selectAll.checked = false;
-            if (selectAll) selectAll.indeterminate = false;
-            updateCount();
-        });
+        //// Сброс чекбоксов при сортировке
+        //table.on('order.dt', function() {
+        //    // table.$('.route-checkbox').prop('checked', false);
+        //    if (selectAll) selectAll.checked = false;
+        //    if (selectAll) selectAll.indeterminate = false;
+        //    updateCount();
+        //});
 
-        // 5. Обработчик "Выбрать все" (с учетом всех страниц пагинации)
+        // Обработчик "Выбрать все" (с учетом всех страниц пагинации)
         if (selectAll) {
             selectAll.addEventListener('change', function() {
                 const isChecked = this.checked;
@@ -355,7 +355,7 @@
             });
         }
 
-        // 6. Делегирование событий для индивидуальных чекбоксов
+        // Делегирование событий для индивидуальных чекбоксов
         // Используем jQuery .on() на теле таблицы, чтобы события ловились после смены страниц
         $('#routesTable tbody').on('change', '.route-checkbox', function() {
             updateCount();
@@ -363,6 +363,56 @@
 
         // Первоначальный запуск
         updateCount();
+
+
+        // Обработка отправки формы для массовой генерации TRFZ с маршрутами на разных страницах списка
+        $('#bulk-generate-form').on('submit', function(e) {
+            // 1. Всегда останавливаем стандартную отправку
+            e.preventDefault();
+            const form = this;
+            const submitButton = $(document.activeElement); // Определяем, какая кнопка нажата
+
+            // 2. Очищаем все старые скрытые поля route_ids
+            $(form).find('input[name="route_ids"]').remove();
+
+            // 3. Собираем выбранные ID со ВСЕХ страниц таблицы
+            const selectedIds = [];
+            table.$('input.route-checkbox:checked').each(function() {
+                selectedIds.push($(this).val());
+            });
+
+            // 4. Валидация
+            if (selectedIds.length === 0) {
+                alert('Пожалуйста, выберите хотя бы один маршрут.');
+                return;
+            }
+
+            // Если нажата кнопка генерации (не удаления) - проверяем лимит
+            if (submitButton.attr('id') === 'bulk-generate-btn' && selectedIds.length > 10) {
+                alert('Можно выбрать не более 10 маршрутов для создания конфигурации.');
+                return;
+            }
+
+            // 5. Создаем скрытые инпуты для каждого выбранного ID
+            selectedIds.forEach(id => {
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'route_ids',
+                    value: id
+                }).appendTo(form);
+            });
+
+            // 6. Если нажата кнопка удаления, нужно подтверждение и смена URL
+            if (submitButton.attr('id') === 'bulk-delete-btn') {
+                if (!confirm('Вы уверены, что хотите БЕЗВОЗВРАТНО удалить все выбранные маршруты?')) {
+                    return;
+                }
+                form.action = submitButton.attr('formaction');
+            }
+
+            // 7. Отправляем форму
+            form.submit();
+        });
     });
 
     // Одиночное удаление (без изменений)
@@ -373,5 +423,6 @@
             form.submit();
         }
     }
+
 </script>
 {% endblock %}
