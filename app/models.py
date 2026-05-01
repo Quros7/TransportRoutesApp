@@ -41,7 +41,9 @@ def load_user(usr_id):
 
 class Route(db.Model):
     id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    
     user_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey(User.id), index=True)
+    user: so.Mapped["User"] = so.relationship("User", backref="routes")
 
     route_name: so.Mapped[str] = so.mapped_column(sa.String(128))
     transport_type: so.Mapped[str] = so.mapped_column(sa.String(4))

@@ -6,6 +6,7 @@ from datetime import datetime
 from urllib.parse import parse_qs
 
 import sqlalchemy as sa
+from sqlalchemy.orm import joinedload
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for, jsonify
 from flask_login import current_user, login_required
 from flask_wtf.csrf import generate_csrf
@@ -14,7 +15,7 @@ from app import db
 from app.audit import log_action, serialize_route
 from app.forms import BulkGenerateForm, ImportRouteForm, RouteInfoForm, RoutePricesForm, RouteStopsForm
 from app.forms.models import RouteInfoModel
-from app.models import Route
+from app.models import Route, User
 from app.utils import write_route_body_to_buffer
 
 from app.services.importers.excel_importer import ExcelRouteImporter
@@ -883,3 +884,34 @@ def import_route():
             flash(f"Критическая ошибка файла: {str(e)}", "danger")
             
     return render_template("import_route.html", form=form)
+
+
+@bp.route("/all-routes")
+@login_required
+def route_list_admin():
+    # Проверка прав: только админ может войти сюда
+    if not current_user.is_admin:
+        flash("Доступ запрещен.", "danger")
+        return redirect(url_for("route_management.route_list"))
+
+    # Загружаем все маршруты и сразу подтягиваем данные пользователей
+    query = (
+        sa.select(Route)
+        .join(User) 
+        .options(joinedload(Route.user))
+        .order_by(User.username, Route.id)
+    )
+    
+    routes = db.session.scalars(query).all()
+
+    csrf_token = generate_csrf()  # Генерируем CSRF токен для использования в шаблоне (например, для массового удаления)
+    bulk_form = BulkGenerateForm()  # Форма для массовой генерации (можно использовать ту же, что и для пользователей)
+
+    if current_user.default_region_code:
+        bulk_form.region_code.data = current_user.default_region_code
+    if current_user.default_carrier_id:
+        bulk_form.carrier_id.data = current_user.default_carrier_id
+    if current_user.default_unit_id:
+        bulk_form.unit_id.data = current_user.default_unit_id
+    
+    return render_template("route_list_admin.html", routes=routes, csrf_token=csrf_token, bulk_form=bulk_form,)

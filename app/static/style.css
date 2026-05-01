@@ -2,6 +2,11 @@ body {
     margin-bottom: 20px;
 }
 
+.container {
+    max-width: 100%;
+    width: 100%;
+}
+
 .index-list {
     padding-left: 80px;
     font-weight: normal;
@@ -190,4 +195,37 @@ body {
 .sticky-matrix-container::-webkit-scrollbar-thumb {
     background: #ccc;
     border-radius: 4px;
+}
+
+/* Списки маршрутов */
+
+.route-list-header {
+    min-width: 250px;
+    max-width: 360px;
+}
+
+.route-list-header-btn {
+    display: flex;
+    box-sizing: content-box;
+    margin-right: 20px;
+}
+
+.route-list-buttons-admin {
+    max-height: 120px;
+    width: max-content;
+}
+
+.route-list-buttons-admin > span, .route-list-buttons-admin > span > a, .route-list-buttons-admin > a, .route-list-buttons-admin > button {
+    width: 110px;
+    margin-bottom: 1px;
+}
+
+.route-list-buttons {
+    max-height: 120px;
+    width: max-content;
+}
+
+.route-list-buttons > span, .route-list-buttons > span > a, .route-list-buttons > a, .route-list-buttons > button {
+    width: 110px;
+    margin-bottom: 1px;
 }
