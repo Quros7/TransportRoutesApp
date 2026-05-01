@@ -705,7 +705,7 @@ def generate_config(route_id):
             action="route_config_generated",
             entity_type="route",
             route_id=route.id,
-            details={"filename": filename, "route_name": route.route_name},
+            details={"filename": filename, "route_id": route.id, "route_name": route.route_name},
             user_id=current_user.id,
         )
         db.session.commit()
@@ -809,6 +809,7 @@ def generate_bulk_config():
             details={"filename": filename, "route_ids": route_ids, "route_names": [r.route_name for r in ordered_routes]},
             user_id=current_user.id,
         )
+        db.session.commit()
 
         return send_file(buffer, as_attachment=True, download_name=filename, mimetype="text/plain")
     
