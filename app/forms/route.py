@@ -13,6 +13,8 @@ from .tariff import TariffTableEntryForm
 
 # 1. Форма для Общей информации (Шаг 1)
 class RouteInfoForm(FlaskForm):
+    # owner_id = HiddenField("ID Владельца")
+
     start_date = DateField(
         "Дата начала действия", 
         validators=[DataRequired(message="Укажите дату начала действия")],

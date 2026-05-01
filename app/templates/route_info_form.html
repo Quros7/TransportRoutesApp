@@ -7,6 +7,31 @@
     <form method="POST" id="route-info-form">
         {{ form.hidden_tag() }}
 
+        <!-- БЛОК ДЛЯ АДМИНИСТРАТОРА -->
+        {% if current_user.is_admin %}
+        <div class="card border-info mb-4">
+            <div class="card-header bg-info text-dark">
+                <strong>Панель администратора: Управление доступом</strong>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <label for="owner_id" class="form-label">Владелец маршрута</label>
+                        <select class="form-select" id="owner_id" name="owner_id">
+                            {% for user in users %}
+                                <option value="{{ user.id }}" 
+                                    {% if route and route.user_id == user.id %}selected{% elif not route and user.id == current_user.id %}selected{% endif %}>
+                                    {{ user.username }} (ID: {{ user.id }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Смена владельца передаст этот маршрут в личный кабинет другого пользователя.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <h3>1. Основные параметры (Заголовок файла)</h3>
         <div class="row">
             <div class="col-md-3 mb-3">

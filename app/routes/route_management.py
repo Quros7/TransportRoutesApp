@@ -73,18 +73,26 @@ def route_list():
 @bp.route("/route/edit/info/<int:route_id>", methods=["GET", "POST"])
 @login_required
 def create_or_edit_route_info(route_id):
-
     # Инициализация переменной 'route' для предотвращения UnboundLocalError
     route = None
+    users = [] # Список для выбора владельца маршрута (только для админов)
+
+    # Если админ, подгружаем всех пользователей
+    if current_user.is_admin:
+        users = db.session.execute(sa.select(User).order_by(User.username)).scalars().all()
 
     if route_id is not None:
         # --- РЕЖИМ РЕДАКТИРОВАНИЯ ---
 
-        # 1. Загрузка существующего маршрута
-        route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
+        # Загрузка существующего маршрута из базы данных
+        # Если админ — ищем просто по ID, если нет — по ID и владельцу
+        if current_user.is_admin:
+            route = db.session.scalar(sa.select(Route).where(Route.id == route_id))
+        else:
+            route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
 
         if route is None:
-            flash("Маршрут не найден.", "danger")
+            flash("Маршрут не найден или у вас нет прав на его редактирование.", "danger")
             return redirect(url_for("route_management.route_list"))
         
         # Создаем форму. obj=route заполнит все текстовые поля (name, number и т.д.)
@@ -116,6 +124,13 @@ def create_or_edit_route_info(route_id):
             form.unit_id.data = current_user.default_unit_id
 
     if form.validate_on_submit():
+        # --- ДЕБАГ ---
+        print("--- DEBUG UPDATE ---")
+        print(f"ID Маршрута: {route.id if route else 'New'}")
+        print(f"Админ ли сейчас: {current_user.is_admin}")
+        print(f"Данные из request.form (owner_id): {request.form.get('owner_id')}")
+        # --- --- ---
+
         # Конвертируем дату из формы обратно в строку YYMMDD
         new_start_date_str = form.start_date.data.strftime("%y%m%d")
 
@@ -166,9 +181,13 @@ def create_or_edit_route_info(route_id):
 
         if route is None:
             # --- Создание нового объекта Route ---
+
+            # Если админ выбрал кого-то в поле owner_id, ставим его, иначе — себя
+            owner_id = request.form.get("owner_id", type=int) if current_user.is_admin else current_user.id
+
             new_route = Route(
                 updated_at=datetime.now().isoformat(),
-                user_id=current_user.id, 
+                user_id=owner_id, 
                 stops=[], price_matrix=[], 
                 **data_to_save)
             db.session.add(new_route)
@@ -190,20 +209,34 @@ def create_or_edit_route_info(route_id):
 
         else:
             # --- Обновление существующего объекта Route ---
-
+            
             # Запоминаем критические состояния ДО обновления
             before_snapshot = serialize_route(route)
-            old_transport_type = route.transport_type
-            old_tariffs = route.tariff_tables  # Это список словарей JSON
+
+            # Запоминаем критические состояния ДО обновления
+            # before_snapshot = serialize_route(route)
+            # old_transport_type = route.transport_type
+            # old_tariffs = route.tariff_tables  # Это список словарей JSON
 
             # Нужно проверить, изменилось ли что-то существенное. Сравниваем словари. 
             # data_to_save содержит: name, type, ids, number, region, decimal, tariffs, start_date.
             has_changes = False
+            
+            # Проверка смены владельца
+            if current_user.is_admin:
+                new_owner_id = request.form.get("owner_id", type=int)
+                print(f"Старый владелец: {route.user_id}, Новый выбранный: {new_owner_id}")
+                
+                if new_owner_id is not None and route.user_id != new_owner_id:
+                    print(f"СМЕНА ВЛАДЕЛЬЦА: с {route.user_id} на {new_owner_id}")
+                    route.user_id = new_owner_id
+                    print(f"ID владельца изменен на: {route.user_id}")
+                    has_changes = True
+
             for key, value in data_to_save.items():
                 if getattr(route, key) != value:
                     has_changes = True
                     print("ИЗМЕНЕНИЯ:\n", "ДО:", getattr(route, key), "\nПосле:", value)
-                    route.updated_at = datetime.now().isoformat() # Добавляем обновление даты правок
                     break
 
             # Обновляем поля
@@ -242,9 +275,11 @@ def create_or_edit_route_info(route_id):
                 route_id=route.id,
                 details={"before": before_snapshot, "after": serialize_route(route)},
             )
-            db.session.commit()
 
             if has_changes:
+                route.updated_at = datetime.now().isoformat() # Добавляем дату правок
+                db.session.commit()
+                print("Изменения закоммичены в БД")
                 flash("Изменения сохранены.", "success")
             else:
                 flash("Изменений не обнаружено.", "secondary")
@@ -258,14 +293,20 @@ def create_or_edit_route_info(route_id):
     # Устанавливаем заголовок страницы
     title = "Создание маршрута: Шаг 1" if route is None else f"Редактирование маршрута: Шаг 1"
 
-    return render_template("route_info_form.html", form=form, route=route, title=title)
+    return render_template("route_info_form.html", form=form, route=route, title=title, users=users)
 
 
 # --- Редактирование/Заполнение остановок (Этап 2) ---
 @bp.route("/route/edit/<int:route_id>/stops", methods=["GET", "POST"])
 @login_required
 def edit_route_stops(route_id):
-    route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
+    if current_user.is_admin:
+        route = db.session.get(Route, route_id)
+    else:
+        route = db.session.scalar(sa.select(Route).where(
+            Route.id == route_id, 
+            Route.user_id == current_user.id
+        ))
     if route is None:
         abort(404)
 
@@ -312,6 +353,7 @@ def edit_route_stops(route_id):
         before_is_completed = route.is_completed
         if route.stops != new_stop_data:
             route.is_completed = False
+            route.updated_at = datetime.now().isoformat() # Добавляем дату правок
             flash("Состав остановок изменился. Пожалуйста, проверьте цены.", "info")
             flash("Изменения сохранены.", "success")
             print("ИЗМЕНЕНИЯ ОСТАНОВОК:\nДО:", route.stops, "\nПосле:", new_stop_data)
@@ -356,36 +398,20 @@ def edit_route_stops(route_id):
         route=route,
         title="Редактирование остановок: Шаг 2",
     )
-    # ruff: disable[ERA001]
-    # Если ни одна из кнопок не была нажата (что маловероятно при form.validate_on_submit),
-    # или если были другие submit-кнопки.
-    # Fallthrough to render_template below for validation errors.
-
-    # # 3. ОБРАБОТКА GET-ЗАПРОСА (инициализация данных)
-    # if request.method == "GET" and route.stops:
-    #     # Очищаем FieldList перед заполнением, чтобы избежать дублирования
-    #     form.stops.entries = []
-    #     for stop_data in route.stops:
-    #         # Преобразуем строку 'km' из БД обратно в float для формы
-    #         try:
-    #             km_for_form = float(stop_data["km"])
-    #         except (TypeError, ValueError):
-    #             # Если по какой-то причине значение некорректно, ставим 0.0
-    #             km_for_form = 0.0
-
-    #         # При инициализации формы km_distance лучше передавать как str или float,
-    #         # если он был сохранен как float, но DecimalField справится с float.
-    #         form.stops.append_entry({"stop_name": stop_data["name"], "km_distance": km_for_form})
-
-    # # 3. РЕНДЕРИНГ ШАБЛОНА
-    # return render_template("route_stops_form.html", form=form, route=route, title="Редактирование остановок: Шаг 2")
 
 
 # --- Форма с ценами за каждый отрезок пути (Этап 3) ---
 @bp.route("/route/edit/<int:route_id>/prices", methods=["GET", "POST"])
 @login_required
 def edit_route_prices(route_id):
-    route = db.session.get(Route, route_id)
+    if current_user.is_admin:
+        route = db.session.get(Route, route_id)
+    else:
+        route = db.session.scalar(sa.select(Route).where(
+            Route.id == route_id, 
+            Route.user_id == current_user.id
+        ))
+    
     if not route:
         flash("Маршрут не найден.", "danger")
         return redirect(url_for("route_management.route_list"))
@@ -498,18 +524,16 @@ def edit_route_prices(route_id):
                 route.price_matrix = new_matrix
                 route.is_completed = True
 
-                # Обновляем техническую дату, если были правки
-                if has_changes:
-                    route.updated_at = datetime.now().isoformat()
-
                 log_action(
                     action="route_prices_updated",
                     entity_type="route",
                     route_id=route.id,
                     details={"before_price_matrix": before_matrix, "after_price_matrix": new_matrix, "changes_detected": has_changes},
                 )
-                db.session.commit()
+                
                 if has_changes:
+                    route.updated_at = datetime.now().isoformat() # Добавляем дату правок
+                    db.session.commit()
                     flash("Цены успешно сохранены! Маршрут готов к экспорту.", "success")
                     print("ИЗМЕНЕНИЯ ЦЕН:\nДО:", before_matrix, "\nПОСЛЕ:", new_matrix)
                 else:
