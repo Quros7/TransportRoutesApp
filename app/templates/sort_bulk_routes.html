@@ -92,7 +92,11 @@
 
                         <div style="width: 150px;" class="ms-3 text-muted small border-start ps-3">
                             {# Начало действия: {{ "20" + route.start_date[0:2] }}-{{ route.start_date[2:4] }}-{{ route.start_date[4:6] }} #}
-                            Начало действия: {{ route.start_date[4:6] }}-{{ route.start_date[2:4] }}-{{ "20" + route.start_date[0:2] }}
+                            {% if  route.start_date %}
+                                Начало действия: {{ route.start_date[4:6] }}-{{ route.start_date[2:4] }}-{{ "20" + route.start_date[0:2] }}
+                            {% else %}
+                                -
+                            {% endif %}
                         </div>
                     </li>
                     {% endfor %}

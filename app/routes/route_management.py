@@ -553,12 +553,13 @@ def delete_route(route_id):
         return redirect(url_for("route_management.route_list"))
 
     # 2. Проверка прав: Убедимся, что пользователь удаляет только свои маршруты
-    if route.user_id != current_user.id:
+    if route.user_id != current_user.id and not current_user.is_admin:
         log_action(
             action="route_delete_forbidden",
             entity_type="route",
             route_id=route.id,
-            details={"owner_id": route.user_id},
+            user_id=current_user.id,
+            details={"owner_id": route.user_id, "route_name": route.route_name},
         )
         db.session.commit()
         flash("У вас нет прав для удаления этого маршрута.", "danger")
@@ -572,7 +573,8 @@ def delete_route(route_id):
             action="route_deleted",
             entity_type="route",
             route_id=before_snapshot["id"],
-            details={"deleted_route_name": route.route_name, "deleted_route_id": route.id, "before": before_snapshot},
+            user_id=current_user.id,
+            details={"owner_id": route.user_id, "deleted_route_name": route.route_name, "deleted_route_id": route.id, "before": before_snapshot},
         )
         db.session.commit()
         flash(f'Маршрут "{route.route_name}" успешно удален.', "success")
@@ -588,7 +590,7 @@ def delete_route(route_id):
 @bp.route("/routes/delete_bulk", methods=["POST"])
 @login_required
 def delete_bulk_routes():
-    # 1. Получаем ID из чекбоксов name="route_ids"
+    # Получаем ID из чекбоксов name="route_ids"
     route_ids = request.form.getlist("route_ids")
 
     if not route_ids:
@@ -596,8 +598,16 @@ def delete_bulk_routes():
         return redirect(url_for("route_management.route_list"))
 
     try:
-        # 2. Загружаем маршруты, проверяя принадлежность пользователю
-        query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
+        # Загружаем маршруты, проверяя принадлежность пользователю
+        # Базовый запрос: выбираем маршруты по списку ID
+        query = sa.select(Route).where(Route.id.in_(route_ids))
+        
+        # Если пользователь НЕ админ, добавляем ограничение по владельцу
+        # Если админ — условие ниже просто не применится, и он получит все ID
+        if not current_user.is_admin:
+            query = query.where(Route.user_id == current_user.id)
+
+        # query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
         routes = db.session.scalars(query).all()
 
         if not routes:
@@ -612,7 +622,8 @@ def delete_bulk_routes():
                 action="route_deleted_bulk",
                 entity_type="route",
                 route_id=route.id,
-                details={"deleted_route_name": route.route_name, "deleted_route_id": route.id, "before": before_snapshot},
+                user_id=current_user.id,
+                details={"owner_id": route.user_id, "deleted_route_name": route.route_name, "deleted_route_id": route.id, "before": before_snapshot},
             )
             db.session.delete(route)
 
@@ -631,8 +642,18 @@ def delete_bulk_routes():
 @bp.route("/route/<int:route_id>/generate_config")
 @login_required
 def generate_config(route_id):
-    # 1. Загружаем маршрут
-    route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
+    # Загружаем маршрут
+    # Базовый запрос: выбираем маршрут по ID
+    query = sa.select(Route).where(Route.id == route_id)
+        
+    # Если пользователь НЕ админ, добавляем ограничение по владельцу
+    # Если админ — условие ниже просто не применится, и он получит все ID
+    if not current_user.is_admin:
+        query = query.where(Route.user_id == current_user.id)
+    
+    # route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
+    route = db.session.scalar(query)
+
     if not route:
         flash("Маршрут не найден.", "danger")
         return redirect(url_for("route_management.route_list"))
@@ -654,7 +675,7 @@ def generate_config(route_id):
         current_date = datetime.now().strftime("%y%m%d")
         current_time = datetime.now().strftime("%H%M%S")
         # ==========================================
-        # 1. ЗАГОЛОВОК ФАЙЛА
+        # ЗАГОЛОВОК ФАЙЛА
         # RR;TTTT;DDDD;YYMMDD;V
         # ==========================================
         # RR - Код региона (2 знака)
@@ -684,7 +705,8 @@ def generate_config(route_id):
             action="route_config_generated",
             entity_type="route",
             route_id=route.id,
-            details={"filename": filename},
+            details={"filename": filename, "route_name": route.route_name},
+            user_id=current_user.id,
         )
         db.session.commit()
 
@@ -739,7 +761,15 @@ def generate_bulk_config():
     decimal_places = request.form.get("decimal_places")
 
     # Загружаем маршруты
-    query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
+    # Базовый запрос: выбираем маршруты по списку ID
+    query = sa.select(Route).where(Route.id.in_(route_ids))
+    
+    # Если пользователь НЕ админ, добавляем ограничение по владельцу
+    # Если админ — условие ниже просто не применится, и он получит все ID
+    if not current_user.is_admin:
+        query = query.where(Route.user_id == current_user.id)
+
+    # query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
     routes_from_db = db.session.scalars(query).all()
 
     # Выстраиваем маршруты в точном порядке из route_ids (от SortableJS)
@@ -773,6 +803,13 @@ def generate_bulk_config():
         buffer.seek(0)
         filename = f"{region_code}_{carrier_id}_{unit_id}_TRFZ_start-date-{file_date_str}_saved-{current_date}-at-{current_time}_({len(ordered_routes)}-routes)"
         
+        log_action(
+            action="route_bulk_config_generated",
+            entity_type="route",
+            details={"filename": filename, "route_ids": route_ids, "route_names": [r.route_name for r in ordered_routes]},
+            user_id=current_user.id,
+        )
+
         return send_file(buffer, as_attachment=True, download_name=filename, mimetype="text/plain")
     
     except Exception as e:
@@ -785,6 +822,7 @@ def generate_bulk_config():
 @login_required
 def sort_bulk_routes():
     route_ids = request.form.getlist("route_ids")
+    print(f"DEBUG: Получены ID: {route_ids}")
     
     if not route_ids or len(route_ids) > 10:
         flash("Выберите от 1 до 10 маршрутов.", "warning")
@@ -802,7 +840,13 @@ def sort_bulk_routes():
     }
 
     # Загружаем объекты маршрутов для отображения имен на странице сортировки
-    query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
+    # Базовый запрос: выбираем маршруты по списку ID
+    query = sa.select(Route).where(Route.id.in_(route_ids))
+    # Если пользователь НЕ админ, добавляем ограничение по владельцу
+    # Если админ — условие ниже просто не применится, и он получит все ID
+    if not current_user.is_admin:
+        query = query.where(Route.user_id == current_user.id)
+
     routes = db.session.scalars(query).all()
     
     # Сортируем их в том порядке, в котором они пришли изначально (для дефолта)

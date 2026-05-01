@@ -269,24 +269,30 @@
                 var rows = api.rows({ page: 'current' }).nodes();
                 var last = null;
 
-                api.column(2, { page: 'current' }).data().each(function(group, i) {
+                // Используем именно данные строк текущей страницы
+                api.rows({ page: 'current' }).data().each(function(rowData, i) {
+                    // Если данные - это массив, берем по индексу. 
+                    // Если вы используете объекты (columns: [{data: 'name'}]), используйте rowData.username
+                    var group = rowData[2]; 
+
                     if (last !== group) {
-                        // Проверяем, свернута ли группа
                         var isCollapsed = collapsedGroups[group];
                         
-                        $(rows).eq(i).before(
-                            '<tr class="group ' + (isCollapsed ? 'collapsed' : '') + '" data-name="' + group + '">' +
-                            '<td colspan="13">Пользователь: ' + group + ' (' + api.rows({search:'applied'}).data().filter(d => d[2] === group).length + ')</td>' +
-                            '</tr>'
-                        );
+                        // Создаем строку группы
+                        var groupRow = $('<tr class="group">')
+                            .addClass(isCollapsed ? 'collapsed' : '')
+                            .attr('data-name', group)
+                            .append('<td colspan="13"><strong>Пользователь: ' + group + '</strong></td>');
+
+                        $(rows).eq(i).before(groupRow);
                         last = group;
                     }
 
-                    // Если группа помечена как свернутая — скрываем саму строку с данными
+                    // Прячем/показываем строку данных
                     if (collapsedGroups[group]) {
-                        $(rows).eq(i).hide();
+                        $(rows).eq(i).css('display', 'none');
                     } else {
-                        $(rows).eq(i).show();
+                        $(rows).eq(i).css('display', 'table-row');
                     }
                 });
             }
@@ -390,9 +396,12 @@
 
             // 3. Собираем выбранные ID со ВСЕХ страниц таблицы
             const selectedIds = [];
-            table.$('input.route-checkbox:checked').each(function() {
+            // .rows().nodes() возвращает все TR, которые когда-либо были созданы таблицей
+            table.rows().nodes().to$().find('input.route-checkbox:checked').each(function() {
                 selectedIds.push($(this).val());
             });
+
+            console.log("Выбранные ID:", selectedIds); // Для отладки в консоли браузера
 
             // 4. Валидация
             if (selectedIds.length === 0) {
