@@ -254,31 +254,53 @@
     })
 
     $(document).ready(function() {
-        var table = $('#routesTable-admin').DataTable({
-        "order": [[1, 'asc']], // Сортируем по Владельцу (колонка 1)
-        "columnDefs": [
-            // { "visible": false, "targets": 2 }, // Прячем колонку Владелец из самой строки
-            { "orderable": false, "targets": 0 } // Чекбоксы не сортируем
-        ],
-        "displayLength": 25,
-        "drawCallback": function(settings) {
-            var api = this.api();
-            var rows = api.rows({ page: 'current' }).nodes();
-            var last = null;
+        // Массив для хранения имен свернутых пользователей
+        var collapsedGroups = {};
 
-            api.column(2, { page: 'current' }).data().each(function(group, i) {
-                if (last !== group) {
-                    $(rows).eq(i).before(
-                        '<tr class="group" style="background-color: #e9ecef; font-weight: bold; cursor: default;">' +
-                        '<td colspan="7"><i class="bi bi-person-circle"></i> Пользователь: ' + group + '</td>' +
-                        '</tr>'
-                    );
-                    last = group;
-                }
-            });
-        },
-        "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/ru.json" }
-    });
+        var table = $('#routesTable-admin').DataTable({
+            "order": [[1, 'asc']],
+            "columnDefs": [
+                // { "visible": false, "targets": 1 }
+                { "orderable": false, "targets": [0, 12] } // Чекбоксы не сортируем
+            ],
+            "pageLength": 50, // Для админа лучше видеть больше строк сразу
+            "drawCallback": function(settings) {
+                var api = this.api();
+                var rows = api.rows({ page: 'current' }).nodes();
+                var last = null;
+
+                api.column(2, { page: 'current' }).data().each(function(group, i) {
+                    if (last !== group) {
+                        // Проверяем, свернута ли группа
+                        var isCollapsed = collapsedGroups[group];
+                        
+                        $(rows).eq(i).before(
+                            '<tr class="group ' + (isCollapsed ? 'collapsed' : '') + '" data-name="' + group + '">' +
+                            '<td colspan="13">Пользователь: ' + group + ' (' + api.rows({search:'applied'}).data().filter(d => d[2] === group).length + ')</td>' +
+                            '</tr>'
+                        );
+                        last = group;
+                    }
+
+                    // Если группа помечена как свернутая — скрываем саму строку с данными
+                    if (collapsedGroups[group]) {
+                        $(rows).eq(i).hide();
+                    } else {
+                        $(rows).eq(i).show();
+                    }
+                });
+            }
+        });
+
+        // Обработчик клика по строке группы
+        $('#routesTable-admin tbody').on('click', 'tr.group', function() {
+            var name = $(this).data('name');
+            // Переключаем состояние: если было true, станет false и наоборот
+            collapsedGroups[name] = !collapsedGroups[name];
+            
+            // Перерисовываем таблицу (вызовется drawCallback)
+            table.draw(false);
+        });
 
         const selectAll = document.getElementById('select-all-admin');
         const countDisplay = document.getElementById('selected-count-display-admin');
@@ -348,7 +370,7 @@
 
         // Делегирование событий для индивидуальных чекбоксов
         // Используем jQuery .on() на теле таблицы, чтобы события ловились после смены страниц
-        $('#routesTable tbody').on('change', '.route-checkbox', function() {
+        $('#routesTable-admin tbody').on('change', '.route-checkbox', function() {
             updateCount();
         });
 
@@ -357,7 +379,7 @@
 
 
         // Обработка отправки формы для массовой генерации TRFZ с маршрутами на разных страницах списка
-        $('#bulk-generate-form').on('submit', function(e) {
+        $('#bulk-generate-form-admin').on('submit', function(e) {
             // 1. Всегда останавливаем стандартную отправку
             e.preventDefault();
             const form = this;

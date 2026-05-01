@@ -229,3 +229,25 @@ body {
     width: 110px;
     margin-bottom: 1px;
 }
+
+/* Стили для группированных строк по пользователям */
+tr.group {
+    cursor: pointer;
+    background-color: #f1f3f5 !important;
+}
+
+tr.group:hover {
+    background-color: #e9ecef !important;
+}
+
+/* Иконка раскрытия */
+tr.group td::before {
+    content: '▼';
+    display: inline-block;
+    margin-right: 10px;
+    transition: transform 0.2s;
+}
+
+tr.group.collapsed td::before {
+    content: '▶';
+}
