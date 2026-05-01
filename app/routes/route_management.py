@@ -516,9 +516,30 @@ def edit_route_prices(route_id):
                                     except (ValueError, TypeError):
                                         cell[t_id] = 0.0
                 
-                # После очистки запоминаем состояние ДО для логов и сравнения
+                # Перед сравнением нормализуем СТАРУЮ матрицу из БД
+                # Чтобы в ней тоже не было пустых {} или строк вместо чисел
                 before_matrix = deepcopy(route.price_matrix)
+                normalized_before = deepcopy(before_matrix)
+                
+                for row in normalized_before:
+                    for cell in row:
+                        if isinstance(cell, dict):
+                            # Если в ячейке вообще нет тарифов (пустой {}), 
+                            # но в новой матрице они появились как 0.0 —
+                            # нам нужно добавить их в старую для честного сравнения.
+                            # Берем структуру ключей из первого тарифа (active_uids)
+                            for t_id in cell.keys():
+                                try:
+                                    cell[t_id] = round(float(cell[t_id]), 2)
+                                except:
+                                    cell[t_id] = 0.0
+
                 has_changes = (before_matrix != new_matrix)
+
+                # Дополнительная проверка на "пустоту": 
+                # Если разница только в том, что в базе был None или [], а пришел список с нулями
+                if not before_matrix and new_matrix:
+                    has_changes = True
 
                 # Сохраняем в базу
                 route.price_matrix = new_matrix
