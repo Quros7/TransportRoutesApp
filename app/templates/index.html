@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container py-3">
+<div class="container py-2">
     <!-- Приветственная секция -->
-    <div class="row mb-5">
+    <div class="row mb-2">
         <div class="col-lg-10 mx-auto text-center">
             <h1 class="display-4 fw-bold mb-3">Здравствуйте, {{ current_user.username }}!</h1>
             <p class="lead text-muted">Инструмент для профессионального управления транспортными маршрутами.</p>
@@ -12,7 +12,7 @@
     </div>
 
     <!-- Основные возможности -->
-    <div class="row g-4 mb-5">
+    <div class="row g-4 mb-2">
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 border-0 shadow-sm">
                 <div class="card-body p-4">
@@ -52,7 +52,7 @@
 
     <!-- Секция для Администратора -->
     {% if current_user.is_admin %}
-    <div class="row mb-5">
+    <div class="row mb-4">
         <div class="col-lg-10 mx-auto">
             <div class="card border-0 bg-light shadow-sm">
                 <div class="card-body p-4 p-md-5">
