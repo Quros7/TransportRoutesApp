@@ -1,20 +1,115 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>Здравствуйте, {{ current_user.username }}!</h1><br>
-    
-    <h3>Это веб-приложение предназначено для составления транспортных маршрутов.</h3><br>
+<div class="container py-3">
+    <!-- Приветственная секция -->
+    <div class="row mb-5">
+        <div class="col-lg-10 mx-auto text-center">
+            <h1 class="display-4 fw-bold mb-3">Здравствуйте, {{ current_user.username }}!</h1>
+            <p class="lead text-muted">Инструмент для профессионального управления транспортными маршрутами.</p>
+            <hr class="my-4 w-25 mx-auto">
+        </div>
+    </div>
 
-    <h3>Вы можете:</h3>
-    <h4 class="ms-4">— Создавать, редактировать и удалять маршруты.</h4>
-    <h4 class="ms-4">— Формировать файлы конфигурации (для готовых маршрутов):<h4>
-    <h5>
-        <ul class="index-list">
-            <li>для одного маршрута (кнопка "Конфиг" в строке маршрута)</li>
-            <li>для нескольких маршрутов (выбрать их в списке, указать параметры шапки объединённого конфигурационного файла, нажать кнопку "Создать конфигурацию для выбранных маршрутов")</li>
-        </ul>
-    </h5><br>
+    <!-- Основные возможности -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-gradient text-white rounded-3 mb-3 p-3">
+                        <i class="fas fa-route fa-2x"></i>
+                    </div>
+                    <h4 class="fw-bold">Управление</h4>
+                    <p class="text-muted">Полный цикл работы с маршрутами: создание, редактирование, копирование и удаление.</p>
+                </div>
+            </div>
+        </div>
 
-    <h3>На странице профиля рекомендуется указать данные о перевозчике.</h3>
-    <p class="text-muted index-desc-small">Они будут автоматически подставляться в шапку конфигурационного файла при выборе нескольких маршрутов.</p>
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="d-inline-flex align-items-center justify-content-center bg-success bg-gradient text-white rounded-3 mb-3 p-3">
+                        <i class="fas fa-file-import fa-2x"></i>
+                    </div>
+                    <h4 class="fw-bold">Импорт</h4>
+                    <p class="text-muted">Мгновенная загрузка данных из внешних файлов форматов <strong>TRFZ</strong> и <strong>CSV</strong>.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="d-inline-flex align-items-center justify-content-center bg-info bg-gradient text-white rounded-3 mb-3 p-3">
+                        <i class="fas fa-file-export fa-2x"></i>
+                    </div>
+                    <h4 class="fw-bold">Экспорт</h4>
+                    <p class="text-muted">Формирование файлов конфигурации (TRFZ) как для одного маршрута, так и пакетная сборка нескольких маршрутов в один файл.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Секция для Администратора -->
+    {% if current_user.is_admin %}
+    <div class="row mb-5">
+        <div class="col-lg-10 mx-auto">
+            <div class="card border-0 bg-light shadow-sm">
+                <div class="card-body p-4 p-md-5">
+                    <div class="d-flex align-items-center justify-content-center mb-4">
+                        <i class="fas fa-user-shield text-primary fa-2x me-3"></i>
+                        <h3 class="mb-0 fw-bold">Вам доступны возможности администратора</h3>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-start">
+                                <i class="fas fa-check-circle text-success mt-1 me-2"></i>
+                                <span>Доступ ко всем маршрутам пользователей</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-start">
+                                <i class="fas fa-check-circle text-success mt-1 me-2"></i>
+                                <span>Админ-панель для управления и статистики</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-start">
+                                <i class="fas fa-check-circle text-success mt-1 me-2"></i>
+                                <span>Межпользовательское копирование</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Полезный совет -->
+    <div class="row">
+        <div class="col-lg-8 mx-auto text-center text-secondary">
+            <div class="p-3 border rounded-pill bg-white shadow-sm d-inline-block px-4">
+                <i class="fas fa-lightbulb text-warning me-2"></i>
+                <strong>Совет:</strong> Укажите данные о перевозчике в 
+                <a href="{{ url_for('profile.user', username=current_user.username) }}" class="text-decoration-none fw-bold">Профиле</a> 
+                для автоматического заполнения документов.
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Плавное появление карточек при загрузке */
+    .card {
+        transition: transform 0.2s ease-in-out, shadow 0.2s ease-in-out;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    }
+    .bg-gradient {
+        background-size: 200% 200%;
+    }
+</style>
 {% endblock %}
