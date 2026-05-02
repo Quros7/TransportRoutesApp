@@ -196,10 +196,12 @@ class RouteAdminView(SecureModelView):
     column_list = [
         "id",
         "user_id",
-        "route_name",
-        "route_number",
-        "transport_type",
         "region_code",
+        "route_number",
+        "route_name",
+        "transport_type",
+        "start_date",
+        "updated_at",
         "carrier_id",
         "unit_id",
         "stops_set",
@@ -208,18 +210,20 @@ class RouteAdminView(SecureModelView):
     column_labels = {
         "id": "ID",
         "user_id": "Пользователь",
-        "route_name": "Название",
-        "route_number": "Номер",
-        "transport_type": "Тип транспорта",
         "region_code": "Регион",
+        "route_number": "Номер",
+        "route_name": "Название",
+        "transport_type": "Тип транспорта",
+        "start_date": "Дата начала действия",
+        "updated_at": "Последнее обновления",
         "carrier_id": "Оператор",
         "unit_id": "Подразделение",
         "stops_set": "Остановки заполнены",
         "is_completed": "Готов",
     }
-    column_sortable_list = ["id", "route_name", "route_number", "transport_type", "is_completed", "stops_set", "user_id"]
-    column_searchable_list = ["route_name", "route_number", "transport_type"]
-    column_filters = ["user_id", "transport_type", "is_completed", "stops_set", "region_code"]
+    column_sortable_list = ["id", "region_code", "route_name", "route_number", "transport_type", "start_date", "updated_at", "carrier_id", "unit_id", "is_completed", "stops_set", "user_id"]
+    column_searchable_list = ["route_name", "route_number", "transport_type", "start_date", "updated_at"]
+    column_filters = ["user_id", "transport_type", "is_completed", "stops_set", "region_code", "start_date", "updated_at",]
 
     def _user_formatter(self, context, model, name):
         if not model.user_id:
@@ -228,8 +232,18 @@ class RouteAdminView(SecureModelView):
         if not user:
             return f"ID {model.user_id}"
         return f"{user.username} (ID {user.id})"
+    
+    def _start_date_formatter(self, context, model, name):
+        if not model.start_date:
+            return "-"
+        return model.start_date[4:6] + "-" + model.start_date[2:4] + "-20" + model.start_date[0:2]
 
-    column_formatters = {"user_id": _user_formatter}
+    def _updated_at_formatter(self, context, model, name):
+        if not model.updated_at:
+            return "-"
+        return model.updated_at[8:10] + "-" + model.updated_at[5:7] + "-" + model.updated_at[0:4] + " " + model.updated_at[11:19]
+
+    column_formatters = {"user_id": _user_formatter, "start_date": _start_date_formatter, "updated_at": _updated_at_formatter}
 
 
 class AuditLogAdminView(SecureModelView):

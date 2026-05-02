@@ -3,6 +3,7 @@ import io
 import json
 from copy import deepcopy
 from datetime import datetime
+import re
 from urllib.parse import parse_qs
 
 import sqlalchemy as sa
@@ -35,6 +36,12 @@ def route_list():
     # Используем функцию generate_csrf(), чтобы получить строковое значение токена.
     csrf_token = generate_csrf()
 
+    users = []
+    if current_user.is_admin:
+        users = db.session.execute(
+            sa.select(User).order_by(User.username)
+        ).scalars().all()
+
     # Инициализируем форму для массовой генерации
     bulk_form = BulkGenerateForm()
 
@@ -59,12 +66,49 @@ def route_list():
     return render_template(
         "route_list.html",
         routes=routes,
-        #    TRANSPORT_TYPES=TRANSPORT_TYPE_CHOICES,
-        csrf_token=csrf_token,  # Это нужно для формы
+        csrf_token=csrf_token,
         bulk_form=bulk_form,
-    )  # <-- ПЕРЕДАЕМ НОВУЮ ФОРМУ
+        users=users
+    )
 
-    # return render_template('route_list.html', routes=routes, csrf_token=csrf_token)
+
+# --- Список всех маршрутов системы (для администраторов) ---
+@bp.route("/all-routes")
+@login_required
+def route_list_admin():
+    # Проверка прав: только админ может войти сюда
+    if not current_user.is_admin:
+        flash("Доступ запрещен.", "danger")
+        return redirect(url_for("route_management.route_list"))
+
+    # Загружаем все маршруты и сразу подтягиваем данные пользователей
+    query = (
+        sa.select(Route)
+        .join(User) 
+        .options(joinedload(Route.user))
+        .order_by(User.username, Route.id)
+    )
+    
+    routes = db.session.scalars(query).all()
+
+    csrf_token = generate_csrf()  # Генерируем CSRF токен для использования в шаблоне (например, для массового удаления)
+
+    users = []
+    if current_user.is_admin:
+        users = db.session.execute(
+            sa.select(User).order_by(User.username)
+        ).scalars().all()
+
+    bulk_form = BulkGenerateForm()  # Форма для массовой генерации (можно использовать ту же, что и для пользователей)
+
+    if current_user.default_region_code:
+        bulk_form.region_code.data = current_user.default_region_code
+    if current_user.default_carrier_id:
+        bulk_form.carrier_id.data = current_user.default_carrier_id
+    if current_user.default_unit_id:
+        bulk_form.unit_id.data = current_user.default_unit_id
+    
+    return render_template("route_list_admin.html", routes=routes, csrf_token=csrf_token, bulk_form=bulk_form, users=users)
 
 
 # --- Создание ИЛИ Редактирование Общей информации (Шаг 1) ---
@@ -976,32 +1020,80 @@ def import_route():
     return render_template("import_route.html", form=form)
 
 
-@bp.route("/all-routes")
+# --- Копирование маршрута ---
+@bp.route("/route/copy/<int:route_id>", methods=["POST"])
 @login_required
-def route_list_admin():
-    # Проверка прав: только админ может войти сюда
-    if not current_user.is_admin:
-        flash("Доступ запрещен.", "danger")
-        return redirect(url_for("route_management.route_list"))
+def copy_route(route_id):
+    original_route = db.session.get(Route, route_id)
 
-    # Загружаем все маршруты и сразу подтягиваем данные пользователей
-    query = (
-        sa.select(Route)
-        .join(User) 
-        .options(joinedload(Route.user))
-        .order_by(User.username, Route.id)
+    if not original_route:
+        flash("Маршрут не найден", "danger")
+        return redirect(url_for("route_management.route_list"))
+    
+    # Обычный пользователь может копировать только свои маршруты
+    if not current_user.is_admin and original_route.user_id != current_user.id:
+        flash("Нет прав для копирования этого маршрута", "danger")
+        return redirect(url_for("route_management.route_list"))
+    
+    # Определяем владельца копии
+    if current_user.is_admin:
+        new_owner_id = request.form.get("new_owner_id", type=int)
+    else:
+        new_owner_id = current_user.id
+
+    # Формируем название для копии
+    # 1. Очищаем базовое имя от старых пометок "(Копия ...)"
+    base_name = re.sub(r' \(Копия\s*\d*\)$', '', original_route.route_name)
+
+    # 2. Логика подбора уникального имени
+    candidate_name = f"{base_name} (Копия)"
+    
+    # Проверяем, существует ли уже базовое "(Копия)"
+    exists = db.session.scalar(sa.select(Route.id).where(Route.route_name == candidate_name))
+    
+    if exists:
+        counter = 1
+        # Ищем свободное число, пока не найдем уникальное имя
+        while True:
+            # Формируем суффикс
+            suffix = f" (Копия {counter})"
+            # Учитываем лимит 120 символов перед проверкой
+            max_base_len = 120 - len(suffix)
+            candidate_name = base_name[:max_base_len] + suffix
+            
+            # Проверяем базу на наличие именно этого имени
+            match = db.session.scalar(sa.select(Route.id).where(Route.route_name == candidate_name))
+            if not match:
+                break  # Имя свободно!
+            counter += 1
+    else:
+        # Если базового "(Копия)" нет, проверяем лимит для него
+        max_base_len = 120 - len(" (Копия)")
+        candidate_name = base_name[:max_base_len] + " (Копия)"
+    
+    # Создаем полную копию данных
+    new_route = Route(
+        route_name=candidate_name,
+        transport_type=original_route.transport_type,
+        carrier_id=original_route.carrier_id,
+        unit_id=original_route.unit_id,
+        route_number=original_route.route_number,
+        region_code=original_route.region_code,
+        decimal_places=original_route.decimal_places,
+        start_date=original_route.start_date,
+        # Копируем сложные структуры данных
+        stops=deepcopy(original_route.stops),
+        price_matrix=deepcopy(original_route.price_matrix),
+        tariff_tables=deepcopy(original_route.tariff_tables),
+        # Системные поля
+        user_id=new_owner_id or original_route.user_id,
+        is_completed=original_route.is_completed,
+        stops_set=original_route.stops_set,
+        updated_at=datetime.now().isoformat()
     )
     
-    routes = db.session.scalars(query).all()
-
-    csrf_token = generate_csrf()  # Генерируем CSRF токен для использования в шаблоне (например, для массового удаления)
-    bulk_form = BulkGenerateForm()  # Форма для массовой генерации (можно использовать ту же, что и для пользователей)
-
-    if current_user.default_region_code:
-        bulk_form.region_code.data = current_user.default_region_code
-    if current_user.default_carrier_id:
-        bulk_form.carrier_id.data = current_user.default_carrier_id
-    if current_user.default_unit_id:
-        bulk_form.unit_id.data = current_user.default_unit_id
+    db.session.add(new_route)
+    db.session.commit()
     
-    return render_template("route_list_admin.html", routes=routes, csrf_token=csrf_token, bulk_form=bulk_form,)
+    flash(f"Маршрут {candidate_name} успешно скопирован для пользователя {new_route.user}", "success")
+    return redirect(url_for("route_management.route_list"))

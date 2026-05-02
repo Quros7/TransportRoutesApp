@@ -226,6 +226,60 @@
                                                 onclick="confirmDelete('{{ route.id }}', '{{ route.route_name }}');">
                                             <i class="fas fa-trash"></i> Удалить
                                         </button>
+
+                                        {% if current_user.is_admin %}
+                                            <!-- Админ: открывает модальное окно с выбором владельца маршрута -->
+                                            <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#copyModal{{ route.id }}">
+                                                <i class="fas fa-copy"></i> Копия
+                                            </button>
+                                        {% else %}
+                                            <!-- Юзер: просто отправляет форму (скрытую) для создания копии себе -->
+                                            <form action="{{ url_for('route_management.copy_route', route_id=route.id) }}" 
+                                                method="POST" style="display:inline;">
+                                                <input type="hidden" name="new_owner_id" value="{{ current_user.id }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-primary" 
+                                                        onclick="return confirm('Копировать этот маршрут?')"
+                                                        title="Сделать копию себе">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                            </form>
+                                        {% endif %}
+                                        
+                                        {% if current_user.is_admin %}
+                                        {# Модальное окно для копирования маршрута (админ) #}
+                                        <div class="modal fade" id="copyModal{{ route.id }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <form action="{{ url_for('route_management.copy_route', route_id=route.id) }}" method="POST">
+                                                        <div class="modal-header">
+                                                        <h5 class="modal-title">Копирование маршрута №{{ route.id }}</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                        <p>Название: <strong>{{ route.route_name }}</strong></p>
+                                                        <div class="mb-3">
+                                                            <label for="userSelect{{ route.id }}" class="form-label">Выберите нового владельца:</label>
+                                                            <select name="new_owner_id" id="userSelect{{ route.id }}" class="form-select" required>
+                                                            {% for user in users %}
+                                                                <option value="{{ user.id }}" {% if user.id == route.user_id %}selected{% endif %}>
+                                                                {{ user.username }} {% if user.id == route.user_id %}(Текущий){% endif %}
+                                                                </option>
+                                                            {% endfor %}
+                                                            </select>
+                                                        </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                                        <button type="submit" class="btn btn-primary">Создать копию</button>
+                                                        </div>
+                                                    </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
