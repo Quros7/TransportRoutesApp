@@ -230,6 +230,14 @@ body {
     margin-bottom: 1px;
 }
 
+#routesTable-admin > tbody > tr > td, #routesTable > tbody > tr > td {
+    padding: 4px 2px;
+}
+
+#routesTable-admin > thead > tr > th, #routesTable > thead > tr > th {
+    padding-right: 22px;
+}
+
 /* Стили для группированных строк по пользователям */
 tr.group {
     cursor: pointer;

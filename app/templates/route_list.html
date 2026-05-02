@@ -241,39 +241,7 @@
                                             </button>
                                         {% endif %}
                                         
-                                        {% if current_user.is_admin %}
-                                        {# Модальное окно для копирования маршрута (админ) #}
-                                        <div class="modal fade" id="copyModal{{ route.id }}" tabindex="-1" aria-hidden="true">
-                                            <div class="modal-dialog">
-                                                <div class="modal-content">
-                                                    <form action="{{ url_for('route_management.copy_route', route_id=route.id) }}" method="POST">
-                                                        <div class="modal-header">
-                                                        <h5 class="modal-title">Копирование маршрута №{{ route.id }}</h5>
-                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                        </div>
-                                                        <div class="modal-body">
-                                                        <p>Название: <strong>{{ route.route_name }}</strong></p>
-                                                        <div class="mb-3">
-                                                            <label for="userSelect{{ route.id }}" class="form-label">Выберите нового владельца:</label>
-                                                            <select name="new_owner_id" id="userSelect{{ route.id }}" class="form-select" required>
-                                                            {% for user in users %}
-                                                                <option value="{{ user.id }}" {% if user.id == route.user_id %}selected{% endif %}>
-                                                                {{ user.username }} {% if user.id == route.user_id %}(Текущий){% endif %}
-                                                                </option>
-                                                            {% endfor %}
-                                                            </select>
-                                                        </div>
-                                                        </div>
-                                                        <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                                                        <button type="submit" class="btn btn-primary">Создать копию</button>
-                                                        </div>
-                                                    </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {% endif %}
+                                        
                                     </div>
                                 </td>
                             </tr>
@@ -283,6 +251,47 @@
             </div>
         </form>
         {# КОНЕЦ ФОРМЫ ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ #}
+
+        {% if current_user.is_admin %}
+            {% for route in routes %}
+                {# Модальное окно для копирования маршрута (админ) #}
+                <div class="modal fade" id="copyModal{{ route.id }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <form action="{{ url_for('route_management.copy_route', route_id=route.id) }}" method="POST">
+                                <div class="modal-header">
+                                <h5 class="modal-title">Копирование маршрута №{{ route.id }}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                <p>Название: <strong>{{ route.route_name }}</strong></p>
+                                <div class="mb-3">
+                                    <label for="userSelect{{ route.id }}" class="form-label">Выберите нового владельца:</label>
+                                    <select name="new_owner_id" id="userSelect{{ route.id }}" class="form-select" required>
+                                        {% for user in users %}
+                                            <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>
+                                                {{ user.username }}
+                                                {% if user.id == current_user.id %}
+                                                    — Копировать мне
+                                                {% elif user.id == route.user_id %}
+                                                    — Текущий владелец
+                                                {% endif %}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                </div>
+                                <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="submit" class="btn btn-primary">Создать копию</button>
+                                </div>
+                            </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
 
         {# Скрытая форма для удаления #}
         <form id="delete-route-form" method="POST" action="">
