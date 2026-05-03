@@ -4,7 +4,7 @@
 <div class="container mt-4">
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{{ url_for('route_management.route_list') }}">Маршруты</a></li>
+            <li class="breadcrumb-item"><a href="{{ next_page.split('?')[0] or url_for('route_management.route_list') }}">Маршруты</a></li>
             <li class="breadcrumb-item active">Порядок экспорта</li>
         </ol>
     </nav>
@@ -103,7 +103,7 @@
                 </ul>
 
                 <div class="d-flex justify-content-between">
-                    <a href="{{ url_for('route_management.route_list') }}" class="btn btn-outline-secondary">
+                    <a href="{{ next_page.split('?')[0] or url_for('route_management.route_list') }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left"></i> Назад
                     </a>
                     <button type="submit" class="btn btn-success px-4">

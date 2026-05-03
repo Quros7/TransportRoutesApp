@@ -2,7 +2,7 @@ import json
 from datetime import UTC, datetime
 
 import sqlalchemy as sa
-from flask import abort, redirect, request, url_for, render_template_string
+from flask import abort, flash, redirect, request, url_for, render_template_string
 from flask_admin import Admin, AdminIndexView, expose
 from flask_admin.menu import MenuLink
 from flask_admin.contrib.sqla import ModelView
@@ -54,7 +54,8 @@ class SecureAdminIndexView(AdminIndexView):
         if not _is_admin():
             if not current_user.is_authenticated:
                 return redirect(url_for("auth.login", next=request.url))
-            return abort(403)
+            flash("Недостаточно прав для доступа к админ-панели.", "warning")
+            return redirect(url_for("auth.index"))
         self._template_args["stats"] = self._build_stats()
         return super().index()
 
@@ -72,7 +73,8 @@ class SecureModelView(ModelView):
     def inaccessible_callback(self, name, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for("auth.login", next=request.url))
-        return abort(403)
+        flash("Недостаточно прав для доступа к админ-панели.", "error")
+        return redirect(url_for("auth.index"))
     
     def after_model_change(self, form, model, is_created):
         action_type = "admin_create" if is_created else "admin_update"
@@ -221,8 +223,8 @@ class RouteAdminView(SecureModelView):
         "stops_set": "Остановки заполнены",
         "is_completed": "Готов",
     }
-    column_sortable_list = ["id", "region_code", "route_name", "route_number", "transport_type", "start_date", "updated_at", "carrier_id", "unit_id", "is_completed", "stops_set", "user_id"]
-    column_searchable_list = ["route_name", "route_number", "transport_type", "start_date", "updated_at"]
+    column_sortable_list = ["user_id", "id", "region_code", "route_name", "route_number", "transport_type", "start_date", "updated_at", "carrier_id", "unit_id", "is_completed", "stops_set",]
+    column_searchable_list = ["route_name", "route_number", "transport_type", "start_date", "updated_at",]
     column_filters = ["user_id", "transport_type", "is_completed", "stops_set", "region_code", "start_date", "updated_at",]
 
     def _user_formatter(self, context, model, name):

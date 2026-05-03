@@ -121,6 +121,8 @@ def create_or_edit_route_info(route_id):
     route = None
     users = [] # Список для выбора владельца маршрута (только для админов)
 
+    next = request.args.get('next')  # Получаем параметр 'next' из URL, если он есть
+
     # Если админ, подгружаем всех пользователей
     if current_user.is_admin:
         users = db.session.execute(sa.select(User).order_by(User.username)).scalars().all()
@@ -137,7 +139,7 @@ def create_or_edit_route_info(route_id):
 
         if route is None:
             flash("Маршрут не найден или у вас нет прав на его редактирование.", "danger")
-            return redirect(url_for("route_management.route_list"))
+            return redirect(next or url_for("route_management.route_list"))
         
         # Создаем форму. obj=route заполнит все текстовые поля (name, number и т.д.)
         form = RouteInfoForm(obj=route, data={"tariff_tables": route.tariff_tables})
@@ -249,7 +251,7 @@ def create_or_edit_route_info(route_id):
                 "success",
             )
             # Переход к Шагу 2
-            return redirect(url_for("route_management.edit_route_stops", route_id=new_route.id))
+            return redirect(url_for("route_management.edit_route_stops", route_id=new_route.id, next=next))
 
         else:
             # --- Обновление существующего объекта Route ---
@@ -329,7 +331,7 @@ def create_or_edit_route_info(route_id):
                 flash("Изменений не обнаружено.", "secondary")
             
             # Переход к Шагу 2
-            return redirect(url_for("route_management.edit_route_stops", route_id=route.id))
+            return redirect(url_for("route_management.edit_route_stops", route_id=route.id, next=next))
     else:
         # ВРЕМЕННО: выводим все ошибки формы в консоль сервера
         print(f"Ошибки формы: {form.errors}")
@@ -337,13 +339,15 @@ def create_or_edit_route_info(route_id):
     # Устанавливаем заголовок страницы
     title = "Создание маршрута: Шаг 1" if route is None else f"Редактирование маршрута: Шаг 1"
 
-    return render_template("route_info_form.html", form=form, route=route, title=title, users=users)
+    return render_template("route_info_form.html", form=form, route=route, title=title, users=users, next=next)
 
 
 # --- Редактирование/Заполнение остановок (Этап 2) ---
 @bp.route("/route/edit/<int:route_id>/stops", methods=["GET", "POST"])
 @login_required
 def edit_route_stops(route_id):
+    next = request.args.get('next')
+
     if current_user.is_admin:
         route = db.session.get(Route, route_id)
     else:
@@ -352,7 +356,9 @@ def edit_route_stops(route_id):
             Route.user_id == current_user.id
         ))
     if route is None:
-        abort(404)
+        # abort(404)
+        flash("Такого маршрута не существует.", "danger")
+        return redirect(next or url_for("route_management.route_list"))
 
     if request.method == "POST":
         # Важный момент: WTForms сам разберет request.form,
@@ -419,7 +425,7 @@ def edit_route_stops(route_id):
         )
         db.session.commit()
 
-        return redirect(url_for("route_management.edit_route_prices", route_id=route.id))
+        return redirect(url_for("route_management.edit_route_prices", route_id=route.id, next=next))
 
     # 2. ЕСЛИ ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)
     elif request.method == "POST":
@@ -441,6 +447,7 @@ def edit_route_stops(route_id):
         form=form,
         route=route,
         title="Редактирование остановок: Шаг 2",
+        next=next,
     )
 
 
@@ -448,6 +455,8 @@ def edit_route_stops(route_id):
 @bp.route("/route/edit/<int:route_id>/prices", methods=["GET", "POST"])
 @login_required
 def edit_route_prices(route_id):
+    next = request.args.get('next')
+
     if current_user.is_admin:
         route = db.session.get(Route, route_id)
     else:
@@ -458,11 +467,11 @@ def edit_route_prices(route_id):
     
     if not route:
         flash("Маршрут не найден.", "danger")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(next or url_for("route_management.route_list"))
 
     if not route.stops_set:
         flash("Сначала настройте список остановок!", "warning")
-        return redirect(url_for("route_management.edit_route_stops", route_id=route.id))
+        return redirect(url_for("route_management.edit_route_stops", route_id=route.id, next=next))
 
     # === Правильно: создаём форму БЕЗ request.form ===
     form = RoutePricesForm()
@@ -529,7 +538,7 @@ def edit_route_prices(route_id):
         if not json_data or not str(json_data).strip():
             current_app.logger.warning("DEBUG (PY): Поле price_matrix_data пустое после всех попыток. НЕ будет перезаписано.")
             flash("Данные матрицы не получены. Попробуйте ещё раз.", "warning")
-            return redirect(url_for("route_management.route_list"))
+            return redirect(next or url_for("route_management.route_list"))
 
         # Теперь безопасно пробуем распарсить JSON
         try:
@@ -604,7 +613,7 @@ def edit_route_prices(route_id):
                 else:
                     flash("Изменений в ценах не обнаружено. Маршрут готов к экспорту.", "secondary")
 
-                return redirect(url_for("route_management.route_list"))
+                return redirect(next or url_for("route_management.route_list"))
             else:
                 current_app.logger.error("DEBUG (PY): json.loads вернул не list, а %s", type(new_matrix))
                 flash("Неверный формат данных матрицы (ожидался список).", "danger")
@@ -626,6 +635,7 @@ def edit_route_prices(route_id):
         form=form,
         route=route,
         title=f"Редактирование цен: Шаг 3",
+        next=next,
     )
 
 
@@ -639,7 +649,7 @@ def delete_route(route_id):
     # 1. Проверка существования маршрута
     if route is None:
         flash("Маршрут не найден.", "danger")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(request.referrer or url_for("route_management.route_list"))
 
     # 2. Проверка прав: Убедимся, что пользователь удаляет только свои маршруты
     if route.user_id != current_user.id and not current_user.is_admin:
@@ -652,7 +662,7 @@ def delete_route(route_id):
         )
         db.session.commit()
         flash("У вас нет прав для удаления этого маршрута.", "danger")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(request.referrer or url_for("route_management.route_list"))
 
     # 3. Удаление из базы данных
     try:
@@ -672,7 +682,7 @@ def delete_route(route_id):
         current_app.logger.error("Ошибка при удалении маршрута %s: %s", route_id, e)
         flash("Произошла ошибка при удалении маршрута.", "danger")
 
-    return redirect(url_for("route_management.route_list"))
+    return redirect(request.referrer or url_for("route_management.route_list"))
 
 
 # --- Удаление нескольких маршрутов из списка ---
@@ -684,7 +694,7 @@ def delete_bulk_routes():
 
     if not route_ids:
         flash("Не выбрано ни одного маршрута для удаления.", "warning")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(request.referrer or url_for("route_management.route_list"))
 
     try:
         # Загружаем маршруты, проверяя принадлежность пользователю
@@ -701,7 +711,7 @@ def delete_bulk_routes():
 
         if not routes:
             flash("Маршруты для удаления не найдены или у вас нет прав.", "danger")
-            return redirect(url_for("route_management.route_list"))
+            return redirect(request.referrer or url_for("route_management.route_list"))
 
         count = len(routes)
         for route in routes:
@@ -724,7 +734,7 @@ def delete_bulk_routes():
         current_app.logger.error("Ошибка при массовом удалении: %s", e)
         flash("Произошла ошибка при массовом удалении маршрутов.", "danger")
 
-    return redirect(url_for("route_management.route_list"))
+    return redirect(request.referrer or url_for("route_management.route_list"))
 
 
 # --- Генерация файла конфигурации для одного маршрута (экспорт TRFZ) ---
@@ -914,9 +924,13 @@ def sort_bulk_routes():
     route_ids = request.form.getlist("route_ids")
     print(f"DEBUG: Получены ID: {route_ids}")
     
+    # Пытаемся получить 'next' из параметров URL
+    next_page = request.args.get('next')
+    print(f"DEBUG: Параметр next_page: {next_page}")
+
     if not route_ids or len(route_ids) > 10:
         flash("Выберите от 1 до 10 маршрутов.", "warning")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(next_page or url_for("route_management.route_list"))
     
     # Создаем экземпляр формы из пришедших данных
     bulk_form = BulkGenerateForm(request.form)
@@ -946,7 +960,8 @@ def sort_bulk_routes():
     return render_template("sort_bulk_routes.html", 
                            routes=sorted_routes, 
                            header_data=header_data,
-                           bulk_form=bulk_form)
+                           bulk_form=bulk_form,
+                           next_page=next_page,)
 
 
 # Импорт маршрута (Полная версия: TRFZ + Excel)
@@ -1008,10 +1023,13 @@ def import_route():
                 except Exception as e:
                     flash(f"Ошибка в одном из маршрутов: {str(e)}", "warning")
                     continue
+            
+            # Пытаемся получить 'next' из параметров URL
+            next_page = request.args.get('next')
 
             db.session.commit()
             flash(f"Успешно импортировано: {imported_count}", "success")
-            return redirect(url_for("route_management.route_list"))
+            return redirect(next_page or url_for("route_management.route_list"))
 
         except Exception as e:
             db.session.rollback()
@@ -1028,12 +1046,12 @@ def copy_route(route_id):
 
     if not original_route:
         flash("Маршрут не найден", "danger")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(request.referrer or url_for("route_management.route_list"))
     
     # Обычный пользователь может копировать только свои маршруты
     if not current_user.is_admin and original_route.user_id != current_user.id:
         flash("Нет прав для копирования этого маршрута", "danger")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(request.referrer or url_for("route_management.route_list"))
     
     # Определяем владельца копии
     if current_user.is_admin:
@@ -1094,6 +1112,9 @@ def copy_route(route_id):
     
     db.session.add(new_route)
     db.session.commit()
+
+    # Пытаемся получить 'next' из параметров URL
+    # next_page = request.args.get('next')
     
     flash(f"Маршрут {candidate_name} успешно скопирован для пользователя {new_route.user}", "success")
-    return redirect(url_for("route_management.route_list"))
+    return redirect(request.referrer or url_for("route_management.route_list"))

@@ -86,7 +86,7 @@
         
         {# Кнопки Назад и Сохранить #}
         <div class="mt-4 d-flex justify-content-between">
-            <a href="{{ url_for('route_management.create_or_edit_route_info', route_id=route.id) }}" 
+            <a href="{{ url_for('route_management.create_or_edit_route_info', route_id=route.id, next=next) }}" 
             class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Назад (Информация о маршруте и тарифах)
             </a>

@@ -4,10 +4,10 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="route-list-header">Все маршруты системы (Администрирование)</h2>
         <div class="route-list-header-btn">
-            <a href="{{ url_for('route_management.create_or_edit_route_info') }}" class="btn btn-success">
+            <a href="{{ url_for('route_management.create_or_edit_route_info', next=request.full_path) }}" class="btn btn-success">
                 <i class="fas fa-plus"></i> Создать новый маршрут
             </a>
-            <a href="{{ url_for('route_management.import_route') }}" class="btn btn-outline-secondary ms-2">
+            <a href="{{ url_for('route_management.import_route', next=request.full_path) }}" class="btn btn-outline-dark ms-2">
                 <i class="fas fa-file-import"></i> Импортировать маршрут
             </a>
         </div>
@@ -19,7 +19,7 @@
         </div>
     {% else %}
         {# НАЧАЛО ФОРМЫ ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ #}
-        <form method="POST" action="{{ url_for('route_management.sort_bulk_routes') }}" id="bulk-generate-form-admin">
+        <form method="POST" action="{{ url_for('route_management.sort_bulk_routes', next=request.full_path) }}" id="bulk-generate-form-admin">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
             {# Панель массовых действий: Кнопка генерации + Поля шапки #}
@@ -158,7 +158,7 @@
                                 <td> 
                                     <div class="d-flex flex-column flex-wrap justify-content-start align-items-start route-list-buttons-admin">
                                         {# Кнопки действий #}
-                                        <a href="{{ url_for('route_management.create_or_edit_route_info', route_id=route.id) }}" 
+                                        <a href="{{ url_for('route_management.create_or_edit_route_info', route_id=route.id, next=request.full_path) }}" 
                                         class="btn btn-sm btn-success me-1" 
                                         data-bs-toggle="tooltip" title="Редактировать информацию">
                                             <i class="fas fa-edit"></i> Инфо
@@ -166,14 +166,14 @@
                                         
                                         {% if route.stops_set %}
                                             <span data-bs-toggle="tooltip" title="Редактировать остановки">
-                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
+                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id, next=request.full_path) }}" 
                                                 class="btn btn-sm btn-success me-1">
                                                     <i class="fas fa-map-marker-alt"></i> Остановки
                                                 </a>
                                             </span>
                                         {% else %}
                                             <span data-bs-toggle="tooltip" title="Редактировать остановки">
-                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
+                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id, next=request.full_path) }}" 
                                                 class="btn btn-sm btn-outline-success me-1">
                                                     <i class="fas fa-map-marker-alt"></i> Остановки
                                                 </a>
@@ -183,14 +183,14 @@
                                         {% if route.stops_set %}
                                             {% if route.is_completed %}
                                                 <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
-                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
+                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id, next=request.full_path) }}" 
                                                     class="btn btn-sm btn-success me-1">
                                                         <i class="fas fa-dollar-sign"></i> Цены
                                                     </a>
                                                 </span>
                                             {% else %}
                                                 <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
-                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
+                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id, next=request.full_path) }}" 
                                                     class="btn btn-sm btn-outline-success me-1">
                                                         <i class="fas fa-dollar-sign"></i> Цены
                                                     </a>

@@ -160,7 +160,7 @@
 
         {# Кнопки Назад и Сохранить #}
         <div class="mt-4 d-flex justify-content-between">
-            <a href="{{ url_for('route_management.route_list') }}" class="btn btn-outline-secondary">
+            <a href="{{ next.split('?')[0] if next else url_for('route_management.route_list') }}" class="btn btn-outline-secondary">
                 <i class="bi bi-chevron-left"></i> Назад к списку маршрутов
             </a>
             
