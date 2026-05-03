@@ -2,6 +2,11 @@ body {
     margin-bottom: 20px;
 }
 
+.container {
+    max-width: 100%;
+    width: 100%;
+}
+
 .index-list {
     padding-left: 80px;
     font-weight: normal;
@@ -31,91 +36,226 @@ body {
     max-width: 380px;
 }
 
+/* СПИСОК МАРШРУТОВ */
+#bulk-delete-btn {
+    margin-left: 1 rem;
+}
 
-/* Подсветка самой ячейки с инпутами */
-.table-active-cell {
-    background-color: #fff9c4 !important; /* Светло-желтый */
-    outline: 2px solid #ffeb3b;
-    transition: all 0.2s;
+
+/* ШАГ 1 - ИНФОРМАЦИЯ О МАРШРУТЕ */
+
+/* Прижимаем блоки к самому низу */
+#route-info-form .row > [class*="col-"], 
+#route-info-form .row > [class*="col-"] {
+    margin-top: auto;
 }
-/* Подсветка заголовков (От/До) */
-.table-active-header {
-    background-color: #fbc02d !important; /* Более насыщенный желтый */
-    color: #000 !important;
-    font-weight: bold;
+
+/* ШАГ 3 - Матрица цен */
+
+/* --- 1. Базовый макет и общие стили ячеек --- */
+.price-matrix {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 1px;
 }
-/* Плавный переход для всех th и td */
-.price-matrix th, .price-matrix td {
+
+.price-matrix th, 
+.price-matrix td {
+    border: 1px solid #adb5bd;
     transition: background-color 0.2s;
+    padding: 8px;
 }
 
-/* Мягкая подсветка строки */
-.table-row-highlight {
-    background-color: #fffde7 !important; /* Очень светлый желтый */
+/* --- 2. Закрепленные области (Sticky) --- */
+
+/* Общие свойства для всех "липких" заголовков */
+.price-matrix thead th,
+.price-matrix tbody th {
+    position: sticky;
+    background-color: #f8f9fa;
+    z-index: 9;
 }
 
-/* Мягкая подсветка столбца */
+/* Верхняя шапка */
+.price-matrix thead th {
+    top: 0;
+    z-index: 10;
+    border-bottom: 2px solid #dee2e6;
+    box-shadow: inset 0 -1px 0 #dee2e6;
+    
+    /* Текстовые настройки */
+    white-space: normal;
+    word-wrap: break-word;
+    line-height: 1.2;
+    text-align: center;
+    vertical-align: middle;
+    min-height: 80px;
+    padding: 10px 5px;
+}
+
+/* Левая колонка */
+.price-matrix tbody th {
+    left: 0;
+    border-right: 2px solid #dee2e6;
+    box-shadow: inset -1px 0 0 #dee2e6;
+    white-space: normal; /* Разрешаем перенос для длинных названий */
+    word-wrap: break-word;
+}
+
+/* Пересечение (Угол "От / До") */
+.price-matrix thead th:first-child {
+    left: 0;
+    z-index: 13;
+    background-color: #e9ecef;
+}
+
+/* --- 3. Геометрия и размеры --- */
+
+/* Ширина первой колонки */
+.price-matrix tbody th, 
+.price-matrix thead th:first-child {
+    width: 185px;
+    min-width: 150px;
+    max-width: 200px;
+}
+
+/* Ширина всех колонок с данными */
+.price-matrix thead th:not(:first-child),
+.price-matrix td {
+    width: 150px;
+    min-width: 150px;
+}
+
+/* --- 4. Интерактив и визуальные состояния --- */
+
+/* Подсветка строки и столбца (мягкая) */
+.table-row-highlight,
 .table-col-highlight {
     background-color: #fffde7 !important;
 }
 
-/* Активная ячейка (на пересечении) — должна быть ярче */
+/* Активная ячейка (на которой фокус) */
 .table-active-cell {
     background-color: #fff9c4 !important;
-    outline: 2px solid #fbc02d !important;
+    outline: 2px solid #fbc02d !important; /* Объединил стили в один яркий вариант */
     z-index: 5;
 }
 
-
-
-/* 1. Контейнер для прокрутки */
-.table-responsive {
-    max-height: 80vh; /* Ограничиваем высоту, чтобы появился вертикальный скролл */
-    overflow: auto;
-    position: relative;
-}
-
-.price-matrix {
-    border-collapse: separate; /* Важно для корректной работы sticky border */
-    border-spacing: 0;
-}
-
-/* 2. Закрепляем верхнюю строку (Шапка) */
-.price-matrix thead th {
-    position: sticky;
-    top: 0;
-    z-index: 10; /* Поверх обычных ячеек */
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
-    box-shadow: inset 0 -1px 0 #dee2e6; /* Имитация границы при скролле */
-}
-
-/* 3. Закрепляем первый столбец (Левая колонка) */
-.price-matrix tbody th {
-    position: sticky;
-    left: 0;
-    z-index: 9;
-    background-color: #f8f9fa;
-    border-right: 2px solid #dee2e6;
-    box-shadow: inset -1px 0 0 #dee2e6;
-    white-space: nowrap; /* Чтобы названия не переносились и не ломали высоту */
-    min-width: 150px;
-}
-
-/* 4. Пересечение (левый верхний угол "От / До") */
-.price-matrix thead th:first-child {
-    left: 0;
-    z-index: 11; /* Самый высокий приоритет */
-    background-color: #e9ecef;
-}
-
-/* Подсветка активных элементов (из прошлого шага) */
-.table-active-cell {
-    background-color: #fff9c4 !important;
-    outline: 2px solid #ffeb3b;
-}
+/* Активные заголовки (строка/столбец) */
 .table-active-header {
     background-color: #fbc02d !important;
-    color: #000 !important;
-    z-index: 12 !important; /* Чтобы подсветка была видна над всем */
+    color: #000;
+    font-weight: bold;
+    z-index: 12 !important;
+}
+
+/* Пустые/недоступные ячейки */
+.price-matrix td.bg-light {
+    background-color: #f1f3f5;
+    background-image: linear-gradient(45deg, #e9ecef 25%, transparent 25%, transparent 50%, #e9ecef 50%, #e9ecef 75%, transparent 75%, transparent);
+    background-size: 10px 10px;
+}
+
+/* --- 5. Внутренние элементы ячейки --- */
+
+.price-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.tariff-input-group label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.tariff-input-group:last-child {
+    border-bottom: none;
+}
+
+/* АДМИНКА */
+
+/* Общее */
+/* Базовое правило для контейнеров с фиксированным скроллом */
+.sticky-matrix-container {
+    max-height: 80vh; 
+    overflow: auto;
+    position: relative;
+    border: 1px solid #dee2e6; /* Небольшая рамка, чтобы таблица не "висела" в воздухе */
+}
+
+/* Опционально: делаем скролл более тонким и современным */
+.sticky-matrix-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.sticky-matrix-container::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+/* Списки маршрутов */
+
+.route-list-header {
+    min-width: 250px;
+    max-width: 360px;
+}
+
+.route-list-header-btn {
+    display: flex;
+    box-sizing: content-box;
+    margin-right: 20px;
+}
+
+.route-list-buttons-admin {
+    max-height: 120px;
+    width: max-content;
+}
+
+.route-list-buttons-admin > span, .route-list-buttons-admin > span > a, .route-list-buttons-admin > a, .route-list-buttons-admin > button {
+    width: 110px;
+    margin-bottom: 1px;
+}
+
+.route-list-buttons {
+    max-height: 120px;
+    width: max-content;
+}
+
+.route-list-buttons > span, .route-list-buttons > span > a, .route-list-buttons > a, .route-list-buttons > button {
+    width: 110px;
+    margin-bottom: 1px;
+}
+
+#routesTable-admin > tbody > tr > td, #routesTable > tbody > tr > td {
+    padding: 4px 2px;
+}
+
+#routesTable-admin > thead > tr > th, #routesTable > thead > tr > th {
+    padding-right: 22px;
+}
+
+/* Стили для группированных строк по пользователям */
+tr.group {
+    cursor: pointer;
+    background-color: #f1f3f5 !important;
+}
+
+tr.group:hover {
+    background-color: #e9ecef !important;
+}
+
+/* Иконка раскрытия */
+tr.group td::before {
+    content: '▼';
+    display: inline-block;
+    margin-right: 10px;
+    transition: transform 0.2s;
+}
+
+tr.group.collapsed td::before {
+    content: '▶';
 }

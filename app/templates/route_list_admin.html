@@ -2,9 +2,9 @@
 
 {% block content %}
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="route-list-header">Мои маршруты</h2>
+        <h2 class="route-list-header">Все маршруты системы (Администрирование)</h2>
         <div class="route-list-header-btn">
-            <a href="{{ url_for('route_management.create_or_edit_route_info') }}" class="btn btn-success">
+            <a href="{{ url_for('route_management.create_or_edit_route_info', next=request.full_path) }}" class="btn btn-success">
                 <i class="fas fa-plus"></i> Создать новый маршрут
             </a>
             <a href="{{ url_for('route_management.import_route', next=request.full_path) }}" class="btn btn-outline-dark ms-2">
@@ -19,7 +19,7 @@
         </div>
     {% else %}
         {# НАЧАЛО ФОРМЫ ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ #}
-        <form method="POST" action="{{ url_for('route_management.sort_bulk_routes', next=request.full_path) }}" id="bulk-generate-form">
+        <form method="POST" action="{{ url_for('route_management.sort_bulk_routes', next=request.full_path) }}" id="bulk-generate-form-admin">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
             {# Панель массовых действий: Кнопка генерации + Поля шапки #}
@@ -53,36 +53,37 @@
                 {# Кнопка и счетчик #}
                 <div class="d-flex align-items-center pt-2 border-top">
                     {# Кнопка генерации TRFZ из нескольких маршрутов #}
-                    <button type="submit" class="btn btn-primary" id="bulk-generate-btn" disabled>
+                    <button type="submit" class="btn btn-primary" id="bulk-generate-btn-admin" disabled>
                         <i class="fas fa-file-download"></i> Создать конфигурацию для выбранных маршрутов
                     </button>
                     {# Кнопка удаления нескольких маршрутов #}
                     <button type="submit" 
                             class="btn btn-outline-danger me-2 ms-3" 
-                            id="bulk-delete-btn" 
+                            id="bulk-delete-btn-admin" 
                             disabled
                             formaction="{{ url_for('route_management.delete_bulk_routes') }}"
                             {# onclick="return confirm('Вы уверены, что хотите БЕЗВОЗВРАТНО удалить все выбранные маршруты?');" #} > 
                         <i class="fas fa-trash-alt"></i> Удалить выбранные
                     </button>
 
-                    <div class="ms-3 text-secondary" id="selected-count-display">
+                    <div class="ms-3 text-secondary" id="selected-count-display-admin">
                         Выбрано: 0
                     </div>
-                    <div class="ms-3 text-secondary" id="limit-hint">(Максимум 10 маршрутов для TRFZ, удаление — без ограничений)</small>
+                    <div class="ms-3 text-secondary" id="limit-hint-admin">(Максимум 10 маршрутов для TRFZ, удаление — без ограничений)</small>
                 </div>
             </div>
 
             <div class="table-responsive mt-3 border">
-                <table id="routesTable" class="table table-striped table-hover align-middle w-100">
+                <table id="routesTable-admin" class="table table-striped table-hover align-middle w-100">
                     <thead>
                         <tr>
                             <th scope="col" class="no-sort">
                                 <div class="form-check d-flex align-items-center">
-                                    <input type="checkbox" id="select-all" class="form-check-input me-2">
+                                    <input type="checkbox" id="select-all-admin" class="form-check-input me-2">
                                 </div>
                             </th>
                             <th scope="col">№</th>
+                            <th scope="col">Владелец</th>
                             <th scope="col">Название маршрута</th>
                             <th scope="col">Номер маршрута</th>
                             <th scope="col">Перевозчик (ID)</th>
@@ -105,8 +106,10 @@
                                     <input type="checkbox" value="{{ route.id }}" class="form-check-input route-checkbox">
                                 </td>
                                 <th scope="row">{{ loop.index }}</th>
+                                <td style="overflow-wrap: anywhere;">
+                                    {{ route.user.username}}
+                                </td>
                                 <td>
-                                    {# <strong>{{ route.route_name }}</strong> #}
                                     {{ route.route_name }}
                                 </td>
                                 <td>{{ route.route_number }}</td>
@@ -153,9 +156,9 @@
                                     {% endif %}
                                 </td>
                                 <td> 
-                                    <div class="d-flex flex-column flex-wrap justify-content-start align-items-start route-list-buttons">
+                                    <div class="d-flex flex-column flex-wrap justify-content-start align-items-start route-list-buttons-admin">
                                         {# Кнопки действий #}
-                                        <a href="{{ url_for('route_management.create_or_edit_route_info', route_id=route.id) }}" 
+                                        <a href="{{ url_for('route_management.create_or_edit_route_info', route_id=route.id, next=request.full_path) }}" 
                                         class="btn btn-sm btn-success me-1" 
                                         data-bs-toggle="tooltip" title="Редактировать информацию">
                                             <i class="fas fa-edit"></i> Инфо
@@ -163,14 +166,14 @@
                                         
                                         {% if route.stops_set %}
                                             <span data-bs-toggle="tooltip" title="Редактировать остановки">
-                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
+                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id, next=request.full_path) }}" 
                                                 class="btn btn-sm btn-success me-1">
                                                     <i class="fas fa-map-marker-alt"></i> Остановки
                                                 </a>
                                             </span>
                                         {% else %}
                                             <span data-bs-toggle="tooltip" title="Редактировать остановки">
-                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" 
+                                                <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id, next=request.full_path) }}" 
                                                 class="btn btn-sm btn-outline-success me-1">
                                                     <i class="fas fa-map-marker-alt"></i> Остановки
                                                 </a>
@@ -180,14 +183,14 @@
                                         {% if route.stops_set %}
                                             {% if route.is_completed %}
                                                 <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
-                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
+                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id, next=request.full_path) }}" 
                                                     class="btn btn-sm btn-success me-1">
                                                         <i class="fas fa-dollar-sign"></i> Цены
                                                     </a>
                                                 </span>
                                             {% else %}
                                                 <span data-bs-toggle="tooltip" title="Редактировать матрицу цен">
-                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id) }}" 
+                                                    <a href="{{ url_for('route_management.edit_route_prices', route_id=route.id, next=request.full_path) }}" 
                                                     class="btn btn-sm btn-outline-success me-1">
                                                         <i class="fas fa-dollar-sign"></i> Цены
                                                     </a>
@@ -223,25 +226,16 @@
                                                 onclick="confirmDelete('{{ route.id }}', '{{ route.route_name }}');">
                                             <i class="fas fa-trash"></i> Удалить
                                         </button>
-                                        
-                                        {% if current_user.is_admin %}
-                                            <!-- Админ: Кнопка открытия модального окна -->
-                                            <button type="button" class="row-copy-btn btn btn-sm btn-outline-primary me-1" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#copyModal{{ route.id }}"
-                                                    title="Копировать другому пользователю">
-                                                <i class="fas fa-copy"></i> Копия
-                                            </button>
-                                        {% else %}
-                                            <!-- Юзер: Используем JavaScript, чтобы отправить POST запрос без участия внешней формы -->
-                                            <button type="button" class="row-copy-btn btn btn-sm btn-outline-primary me-1" 
-                                                    onclick="if(confirm('Копировать этот маршрут?')) { submitCopy('{{ url_for('route_management.copy_route', route_id=route.id) }}'); }"
-                                                    title="Сделать копию себе">
-                                                <i class="fas fa-copy"></i> Копия
-                                            </button>
-                                        {% endif %}
+
+                                        <!-- Админ: открывает модальное окно с выбором владельца маршрута -->
+                                        <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#copyModal{{ route.id }}">
+                                            <i class="fas fa-copy"></i> Копия
+                                        </button>
                                         
                                         
+
                                     </div>
                                 </td>
                             </tr>
@@ -252,49 +246,49 @@
         </form>
         {# КОНЕЦ ФОРМЫ ДЛЯ МАССОВОЙ ГЕНЕРАЦИИ #}
 
-        {% if current_user.is_admin %}
-            {% for route in routes %}
-                {# Модальное окно для копирования маршрута (админ) #}
-                <div class="modal fade" id="copyModal{{ route.id }}" tabindex="-1" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <form action="{{ url_for('route_management.copy_route', route_id=route.id) }}" method="POST">
-                                <div class="modal-header">
-                                <h5 class="modal-title">Копирование маршрута №{{ route.id }}</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                </div>
-                                <div class="modal-body">
-                                <p>Название: <strong>{{ route.route_name }}</strong></p>
-                                <div class="mb-3">
-                                    <label for="userSelect{{ route.id }}" class="form-label">Выберите нового владельца:</label>
-                                    <select name="new_owner_id" id="userSelect{{ route.id }}" class="form-select" required>
-                                        {% for user in users %}
-                                            <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>
-                                                {{ user.username }}
-                                                {% if user.id == current_user.id %}
-                                                    — Копировать мне
-                                                {% elif user.id == route.user_id %}
-                                                    — Текущий владелец
-                                                {% endif %}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                </div>
-                                <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                                <button type="submit" class="btn btn-primary">Создать копию</button>
-                                </div>
-                            </form>
+        {% for route in routes %}
+            {% if current_user.is_admin %}
+            {# Модальное окно для копирования маршрута (админ) #}
+            <div class="modal fade" id="copyModal{{ route.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form action="{{ url_for('route_management.copy_route', route_id=route.id) }}" method="POST">
+                            <div class="modal-header">
+                            <h5 class="modal-title">Копирование маршрута №{{ route.id }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
+                            <div class="modal-body">
+                            <p>Название: <strong>{{ route.route_name }}</strong></p>
+                            <div class="mb-3">
+                                <label for="userSelect{{ route.id }}" class="form-label">Выберите нового владельца:</label>
+                                <select name="new_owner_id" id="userSelect{{ route.id }}" class="form-select" required>
+                                {% for user in users %}
+                                    <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>
+                                        {{ user.username }}
+                                        {% if user.id == current_user.id %}
+                                            — Копировать мне
+                                        {% elif user.id == route.user_id %}
+                                            — Текущий владелец
+                                        {% endif %}
+                                    </option>
+                                {% endfor %}
+                                </select>
+                            </div>
+                            </div>
+                            <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Создать копию</button>
+                            </div>
+                        </form>
                         </div>
                     </div>
                 </div>
-            {% endfor %}
-        {% endif %}
+            </div>
+            {% endif %}
+        {% endfor %}
 
         {# Скрытая форма для удаления #}
-        <form id="delete-route-form" method="POST" action="">
+        <form id="delete-route-form-admin" method="POST" action="">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         </form>
     {% endif %}
@@ -311,48 +305,80 @@
     })
 
     $(document).ready(function() {
-        // Инициализация DataTables
-        const table = $('#routesTable').DataTable({
-            "language": {
-                "processing": "Подождите...",
-                "search": "Поиск:",
-                "lengthMenu": "Показать _MENU_ записей",
-                "info": "Записи с _START_ до _END_ из _TOTAL_ записей",
-                "infoEmpty": "Записи с 0 до 0 из 0 записей",
-                "infoFiltered": "(отфильтровано из _MAX_ записей)",
-                "loadingRecords": "Загрузка записей...",
-                "zeroRecords": "Записи отсутствуют.",
-                "emptyTable": "В таблице отсутствуют данные",
-                "paginate": {
-                    "first": "Первая",
-                    "previous": "Предыдущая",
-                    "next": "Следующая",
-                    "last": "Последняя"
-                },
-                "aria": {
-                    "sortAscending": ": активировать для сортировки столбца по возрастанию",
-                    "sortDescending": ": активировать для сортировки столбца по убыванию"
-                }
-            },
-            "pageLength": 25,
-            "order": [[1, "asc"]], // По умолчанию сортируем по дате изменения
+        // Массив для хранения имен свернутых пользователей
+        var collapsedGroups = {};
+
+        var table = $('#routesTable-admin').DataTable({
+            "order": [[1, 'asc']],
             "columnDefs": [
-                { "targets": "no-sort", "orderable": false } // Отключаем сортировку для чекбоксов и действий
+                // { "visible": false, "targets": 1 }
+                { "orderable": false, "targets": [0, 12] } // Чекбоксы не сортируем
             ],
-            "stateSave": false, // Состояние фильтров и сортировки
-            "drawCallback": function() {
-                // Инициализируем тултипы для новых отрисованных строк
+            "pageLength": 50, // Для админа лучше видеть больше строк сразу
+            "language": {
+            "lengthMenu": "Показать _MENU_ записей на странице",
+            "zeroRecords": "Ничего не найдено",
+            "info": "Показана страница _PAGE_ из _PAGES_",
+            "infoEmpty": "Нет доступных записей",
+            "infoFiltered": "(отфильтровано из _MAX_ записей)",
+            "search": "Поиск:",
+            "paginate": {
+                "first": "Первая",
+                "last": "Последняя",
+                "next": "Вперед",
+                "previous": "Назад"
+            },
+            "loadingRecords": "Загрузка...",
+            "processing": "В процессе..."
+        },
+            "drawCallback": function(settings) {
                 var api = this.api();
-                $(api.table().container()).find('[data-bs-toggle="tooltip"]').each(function() {
-                    new bootstrap.Tooltip(this);
+                var rows = api.rows({ page: 'current' }).nodes();
+                var last = null;
+
+                // Используем именно данные строк текущей страницы
+                api.rows({ page: 'current' }).data().each(function(rowData, i) {
+                    // Если данные - это массив, берем по индексу. 
+                    // Если вы используете объекты (columns: [{data: 'name'}]), используйте rowData.username
+                    var group = rowData[2]; 
+
+                    if (last !== group) {
+                        var isCollapsed = collapsedGroups[group];
+                        
+                        // Создаем строку группы
+                        var groupRow = $('<tr class="group">')
+                            .addClass(isCollapsed ? 'collapsed' : '')
+                            .attr('data-name', group)
+                            .append('<td colspan="13"><strong>Пользователь: ' + group + '</strong></td>');
+
+                        $(rows).eq(i).before(groupRow);
+                        last = group;
+                    }
+
+                    // Прячем/показываем строку данных
+                    if (collapsedGroups[group]) {
+                        $(rows).eq(i).css('display', 'none');
+                    } else {
+                        $(rows).eq(i).css('display', 'table-row');
+                    }
                 });
             }
         });
 
-        const selectAll = document.getElementById('select-all');
-        const countDisplay = document.getElementById('selected-count-display');
-        const bulkGenBtn = document.getElementById('bulk-generate-btn');
-        const bulkDelBtn = document.getElementById('bulk-delete-btn');
+        // Обработчик клика по строке группы
+        $('#routesTable-admin tbody').on('click', 'tr.group', function() {
+            var name = $(this).data('name');
+            // Переключаем состояние: если было true, станет false и наоборот
+            collapsedGroups[name] = !collapsedGroups[name];
+            
+            // Перерисовываем таблицу (вызовется drawCallback)
+            table.draw(false);
+        });
+
+        const selectAll = document.getElementById('select-all-admin');
+        const countDisplay = document.getElementById('selected-count-display-admin');
+        const bulkGenBtn = document.getElementById('bulk-generate-btn-admin');
+        const bulkDelBtn = document.getElementById('bulk-delete-btn-admin');
 
         // Функция обновления счетчика и состояния кнопок
         function updateCount() {
@@ -417,7 +443,7 @@
 
         // Делегирование событий для индивидуальных чекбоксов
         // Используем jQuery .on() на теле таблицы, чтобы события ловились после смены страниц
-        $('#routesTable tbody').on('change', '.route-checkbox', function() {
+        $('#routesTable-admin tbody').on('change', '.route-checkbox', function() {
             updateCount();
         });
 
@@ -426,7 +452,7 @@
 
 
         // Обработка отправки формы для массовой генерации TRFZ с маршрутами на разных страницах списка
-        $('#bulk-generate-form').on('submit', function(e) {
+        $('#bulk-generate-form-admin').on('submit', function(e) {
             // 1. Всегда останавливаем стандартную отправку
             e.preventDefault();
             const form = this;
@@ -437,9 +463,12 @@
 
             // 3. Собираем выбранные ID со ВСЕХ страниц таблицы
             const selectedIds = [];
-            table.$('input.route-checkbox:checked').each(function() {
+            // .rows().nodes() возвращает все TR, которые когда-либо были созданы таблицей
+            table.rows().nodes().to$().find('input.route-checkbox:checked').each(function() {
                 selectedIds.push($(this).val());
             });
+
+            console.log("Выбранные ID:", selectedIds); // Для отладки в консоли браузера
 
             // 4. Валидация
             if (selectedIds.length === 0) {
@@ -448,7 +477,7 @@
             }
 
             // Если нажата кнопка генерации (не удаления) - проверяем лимит
-            if (submitButton.attr('id') === 'bulk-generate-btn' && selectedIds.length > 10) {
+            if (submitButton.attr('id') === 'bulk-generate-btn-admin' && selectedIds.length > 10) {
                 alert('Можно выбрать не более 10 маршрутов для создания конфигурации.');
                 return;
             }
@@ -463,7 +492,7 @@
             });
 
             // 6. Если нажата кнопка удаления, нужно подтверждение и смена URL
-            if (submitButton.attr('id') === 'bulk-delete-btn') {
+            if (submitButton.attr('id') === 'bulk-delete-btn-admin') {
                 if (!confirm('Вы уверены, что хотите БЕЗВОЗВРАТНО удалить все выбранные маршруты?')) {
                     return;
                 }
@@ -478,34 +507,10 @@
     // Одиночное удаление (без изменений)
     function confirmDelete(routeId, routeName) {
         if (confirm('Вы уверены, что хотите удалить маршрут "' + routeName + '"? Это действие необратимо.')) {
-            const form = document.getElementById('delete-route-form');
+            const form = document.getElementById('delete-route-form-admin');
             form.action = "{{ url_for('route_management.delete_route', route_id=0) }}".replace('0', routeId);
             form.submit();
         }
-    }
-
-    function submitCopy(url) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = url;
-        
-        // Добавляем CSRF токен, если он используется в проекте
-        const csrfToken = '{{ csrf_token}}';
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = 'csrf_token';
-        csrfInput.value = csrfToken;
-        form.appendChild(csrfInput);
-
-        // Добавляем ID владельца (для юзера это он сам)
-        const ownerInput = document.createElement('input');
-        ownerInput.type = 'hidden';
-        ownerInput.name = 'new_owner_id';
-        ownerInput.value = '{{ current_user.id }}';
-        form.appendChild(ownerInput);
-
-        document.body.appendChild(form);
-        form.submit();
     }
 
 </script>

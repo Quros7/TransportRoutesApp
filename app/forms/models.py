@@ -53,32 +53,43 @@ class RegistrationModel(BaseModel):
 
 
 class TariffTableEntryModel(BaseModel):
+    uid: str = Field(...)
     tariff_name: str = Field(..., min_length=1, max_length=50)
     table_type_code: str = Field(..., min_length=1, max_length=2)
-    ss_series_codes: str = Field(..., min_length=1)
+    ss_series_codes: str = Field(default="")
 
     @field_validator("table_type_code")
     @classmethod
     def validate_table_type_code(cls, v):
-        if v not in ["02", "P", "T", "F"]:
-            raise ValueError('Допускается только "02" (для первой таблицы), "P", "T" или "F".')
-        return v
+        if not isinstance(v, str):
+            return v
+        
+        # 1. Удаляем пробелы по краям и переводим в верхний регистр (Разрешаем и маленькие, и большие)
+        v_clean = v.strip().upper()
+        
+        # 2. Проверяем соответствие разрешенным кодам
+        if v_clean not in ["02", "P", "T", "F"]:
+            # Важно: Сообщение об ошибке теперь содержит только заглавные буквы
+            raise ValueError('Допускается только "02", "P", "T" или "F".')
+            
+        return v_clean
 
     @field_validator("ss_series_codes")
     @classmethod
     def validate_ss_series_codes(cls, v):
-        if not v.strip():
-            raise ValueError('Введите коды серий SS без пробелов через ";". Каждая серия должна быть 2-значным числом (или буквенным кодом).')
-
-        pattern = r"^(\d{2}|[A-Z])(;(\d{2}|[A-Z]))*$"
+        # Если пусто - разрешаем (валидацию "пустоты" сделаем в RouteInfoModel)
+        if not v or not v.strip():
+            return ""
+        
+        pattern = r"^(\d{2})(;(\d{2}))*$"
         if not re.match(pattern, v):
-            raise ValueError('Введите коды серий SS без пробелов через ";". Каждая серия должна быть 2-значным числом (или буквенным кодом).')
+            raise ValueError('Каждая серия должна быть 2-значным числом, разделитель ";".')
         return v
 
 
 class StopModel(BaseModel):
-    stop_name: str = Field(..., min_length=1, max_length=19)
-    km_distance: Decimal = Field(..., le=Decimal("99.99"))
+    stop_name: str = Field(..., min_length=1, max_length=100)
+    km_distance: Decimal = Field(..., le=Decimal("999.99"))
 
     @field_validator("km_distance")
     @classmethod
@@ -92,7 +103,7 @@ class StopModel(BaseModel):
     def validate_km_distance_format(cls, v: Decimal):
         # Check that it has exactly 2 decimal places
         if v.as_tuple().exponent != -2 and v != v.quantize(Decimal("0.00")):
-            raise ValueError("Расстояние должно иметь не более двух знаков после запятой (Формат 99.99).")
+            raise ValueError("Расстояние (км) должно иметь не более двух знаков после запятой (Формат 999.99).")
         return v
 
 
@@ -101,10 +112,13 @@ class RouteInfoModel(BaseModel):
     carrier_id: str = Field(..., pattern=r"^\d{1,4}$")
     unit_id: str = Field(..., pattern=r"^\d{1,4}$")
     decimal_places: str = Field(..., pattern=r"^[012]$")
-    route_name: str = Field(..., min_length=1, max_length=30)
-    route_number: str = Field(..., pattern=r"^\d{1,6}$")
+    route_name: str = Field(..., min_length=1, max_length=120)
+    # route_number: str = Field(..., pattern=r"^\d{1,6}$")
+    route_number: str = Field(..., pattern=r"^[0-9a-zA-Zа-яА-Я/\-]{1,6}$")
     transport_type: str
     tariff_tables: list[TariffTableEntryModel] = Field(..., min_length=1, max_length=15)
+    start_date: str = Field(..., pattern=r"^\d{6}$")
+    updated_at: str = Field(default=None) # Техническая дата
 
     @field_validator("region_code")
     @classmethod
@@ -124,7 +138,12 @@ class RouteInfoModel(BaseModel):
     @field_validator("route_number")
     @classmethod
     def format_route_number(cls, v):
-        return v.zfill(6)
+        if not re.match(r"^[0-9a-zA-Zа-яА-Я/\-]{1,6}$", v):
+            raise ValueError("Номер маршрута должен содержать от 1 до 6 символов (цифры, буквы, / или -)")
+        
+        #return v.zfill(6)
+        return v
+        # return v.zfill(6) if v.isdigit() else v
 
     @field_validator("transport_type")
     @classmethod
@@ -143,40 +162,31 @@ class RouteInfoModel(BaseModel):
         all_ss_codes = set()
 
         for i, entry in enumerate(v):
-            # 1. Правила для Таблицы 1 (i == 0)
+            # Используем наш спец-маркер ID:index:field для точного маппинга в форму
+            
+            # 1. Проверка типа для первой и последующих таблиц
             if i == 0:
                 if entry.table_type_code != "02":
-                    raise ValueError('Таблица 1 должна начинаться с кода "02".')
-
-                # Проверяем, что список серий SS не пуст
-                ss_codes = [c.strip() for c in entry.ss_series_codes.split(";") if c.strip()]
-                if not ss_codes:
-                    raise ValueError('Таблица 1 должна содержать серии SS после "02".')
-
-            # 2. Правила для Таблиц > 1 (i > 0)
+                    raise ValueError(f'ID:{i}:table_type_code:Таблица 1 (основная) должна иметь код "02".')
             else:
                 if entry.table_type_code not in ["P", "T", "F"]:
-                    raise ValueError(f'Таблица {i + 1} должна иметь тип "P", "T" или "F".')
+                    raise ValueError(f'ID:{i}:table_type_code:Выберите тип "P", "T" или "F".')
+                # Для таблиц > 1 серии SS ОБЯЗАТЕЛЬНЫ
+                if not entry.ss_series_codes or not entry.ss_series_codes.strip():
+                    raise ValueError(f'ID:{i}:ss_series_codes:Для этой таблицы необходимо указать серии SS.')
 
-            # 3. Проверка уникальности серий SS
+            # 2. Проверка уникальности серий SS
             ss_codes = [c.strip() for c in entry.ss_series_codes.split(";") if c.strip()]
             for code in ss_codes:
                 if code in all_ss_codes:
-                    raise ValueError(f'Серия SS "{code}" в Таблице {i + 1} уже присутствует в другой таблице.')
+                    raise ValueError(f'ID:{i}:ss_series_codes:Серия SS "{code}" уже используется в другой таблице.')
                 all_ss_codes.add(code)
-
         return v
 
 
 class RouteStopsModel(BaseModel):
-    # transport_type must come before stops so that the validator for stops
-    # can read the correct value from info.data. If transport_type is declared
-    # after stops, info.data in the field_validator may not yet include it and
-    # the default of "0x02" (city) will be used, causing every route to be
-    # treated as city during validation. We originally observed this bug when
-    # intercity routes (0x40) were incorrectly rejected as "городской".
     transport_type: str  # Need this for validation
-    stops: list[StopModel] = Field(..., min_length=1)
+    stops: list[StopModel] = Field(..., min_length=1, max_length=100)
 
     @field_validator("stops")
     @classmethod
@@ -185,11 +195,14 @@ class RouteStopsModel(BaseModel):
         transport_type = info.data.get("transport_type", "0x02")
         is_city_route = transport_type == "0x02"
 
-        if not is_city_route and len(v) < 2:
-            raise ValueError("Маршрут должен содержать минимум 2 остановки (начальную и конечную).")
+        # if not is_city_route and len(v) < 2:
+        #     raise ValueError("Маршрут должен содержать минимум 2 остановки (начальную и конечную).")
 
-        if is_city_route and len(v) > 1:
-            raise ValueError("Городской маршрут может содержать только одну зону (Остановка 0).")
+        # if is_city_route and len(v) > 1:
+            # raise ValueError("Городской маршрут может содержать только одну зону (Остановка 0).")
+        
+        if len(v) < 1:
+            raise ValueError("Маршрут должен содержать хотя бы одну остановку.")
 
         previous_km = Decimal("-1.0")
 

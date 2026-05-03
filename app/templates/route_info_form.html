@@ -2,9 +2,35 @@
 
 {% block content %}
     <h2>{{ title }}</h2>
+    <p>Маршрут: <strong>{{ route.route_name if route.route_name else 'Новый маршрут' }}</strong></p>
     
     <form method="POST" id="route-info-form">
         {{ form.hidden_tag() }}
+
+        <!-- БЛОК ДЛЯ АДМИНИСТРАТОРА -->
+        {% if current_user.is_admin %}
+        <div class="card border-info mb-4">
+            <div class="card-header bg-info text-dark">
+                <strong>Панель администратора: Управление доступом</strong>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <label for="owner_id" class="form-label">Владелец маршрута</label>
+                        <select class="form-select" id="owner_id" name="owner_id">
+                            {% for user in users %}
+                                <option value="{{ user.id }}" 
+                                    {% if route and route.user_id == user.id %}selected{% elif not route and user.id == current_user.id %}selected{% endif %}>
+                                    {{ user.username }} (ID: {{ user.id }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Смена владельца передаст этот маршрут в личный кабинет другого пользователя.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <h3>1. Основные параметры (Заголовок файла)</h3>
         <div class="row">
@@ -27,6 +53,12 @@
                 {{ form.decimal_places.label(class="form-label") }}
                 {{ form.decimal_places(class="form-select") }}
                 {% for error in form.decimal_places.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
+            </div>
+            
+            <div class="col-md-3 mb-3">
+                {{ form.start_date.label(class="form-label") }}
+                {{ form.start_date(class="form-control", type="date") }}
+                {% for error in form.start_date.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
             </div>
         </div>
         
@@ -55,10 +87,24 @@
 
         <h3>3. Тарифные Таблицы (Строки Tabs)</h3>
         <p class="text-muted small">
-            Каждая таблица соответствует одной строке в блоке Tabs. Максимум 15 таблиц. <br>
+            Каждая таблица соответствует одной строке в блоке Tabs. Максимум 10 таблиц. <br>
             <b>Таблица 1:</b> Код должен быть <b>02</b>, содержит все серии SU и EP. <br>
             <b>Остальные таблицы:</b> Код <b>P</b>, <b>T</b> или <b>F</b>, содержат серии проездных.
         </p>
+
+        {% if form.tariff_tables.errors %}
+            <div class="alert alert-danger">
+                <h5 class="alert-heading">Ошибка в структуре таблиц:</h5>
+                <ul class="mb-0">
+                    {% for error in form.tariff_tables.errors %}
+                        {# Выводим только если это обычная строка и в ней нет признаков словаря/дампа #}
+                        {% if error is string and '{' not in error and '}' not in error %}
+                            <li>{{ error }}</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
 
         <div id="tariff-tables-container">
             {# Рендеринг существующих тарифных таблиц #}
@@ -66,9 +112,10 @@
             {% for entry_form in form.tariff_tables %}
                 <div class="card mb-3 tariff-table-entry" data-index="{{ loop.index0 }}">
                     <div class="card-body">
+
                         <h5 class="card-title">Таблица {{ loop.index }}</h5> 
                         
-                        {# ИЗМЕНЕНИЕ: ОБНОВЛЕННЫЕ ПОЛЯ В СООТВЕТСТВИИ С TariffTableEntryForm #}
+                        {# ПОЛЯ В СООТВЕТСТВИИ С TariffTableEntryForm #}
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 {{ entry_form.form.tariff_name.label(class="form-label") }}
@@ -77,14 +124,22 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 {{ entry_form.form.table_type_code.label(class="form-label") }}
-                                {{ entry_form.form.table_type_code(class="form-control table-type-code", placeholder="02, P, T или F") }}
+                                {% if loop.index0 == 0 %}
+                                    {# Для первой таблицы оставляем текстовое поле, оно будет заблокировано через JS/атрибут #}
+                                    {{ entry_form.form.table_type_code(class="form-control table-type-code", readonly=True, value="02") }}
+                                {% else %}
+                                    {# Для остальных таблиц используем select #}
+                                    {# Если в форме это SelectField, WTForms сам отрендерит options. #}
+                                    {# Если это StringField, добавим атрибут class для превращения в select на стороне клиента или просто выведем как есть. #}
+                                    {{ entry_form.form.table_type_code(class="form-select table-type-code") }}
+                                {% endif %}
                                 {% for error in entry_form.form.table_type_code.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
                             </div>
                         </div>
 
                         <div class="mb-3">
                             {{ entry_form.form.ss_series_codes.label(class="form-label") }}
-                            {{ entry_form.form.ss_series_codes(class="form-control ss-codes-input", placeholder="Коды серий SS через ';', напр. 15;20;58") }}
+                            {{ entry_form.form.ss_series_codes(class="form-control ss-codes-input", placeholder="Например: 28 или 15;20;58") }}
                             {% for error in entry_form.form.ss_series_codes.errors %}<span class="text-danger">{{ error }}</span>{% endfor %}
                         </div>
                         
@@ -105,7 +160,7 @@
 
         {# Кнопки Назад и Сохранить #}
         <div class="mt-4 d-flex justify-content-between">
-            <a href="{{ url_for('route_management.route_list') }}" class="btn btn-outline-secondary">
+            <a href="{{ next.split('?')[0] if next else url_for('route_management.route_list') }}" class="btn btn-outline-secondary">
                 <i class="bi bi-chevron-left"></i> Назад к списку маршрутов
             </a>
             
@@ -125,7 +180,9 @@
     const tariffTableTemplate = `
         <div class="card mb-3 tariff-table-entry">
             <div class="card-body">
-                <h5 class="card-title">Таблица NEW_INDEX</h5>
+                <input type="hidden" name="tariff_tables-NEW_INDEX-uid" value="NEW_UID">
+
+                <h5 class="card-title">Таблица NEW_LABEL</h5>
                 
                 <div class="row">
                     <div class="col-md-6 mb-3">
@@ -134,13 +191,18 @@
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Тип/Код Таблицы (02/P/T/F)</label>
-                        <input type="text" name="tariff_tables-NEW_INDEX-table_type_code" class="form-control table-type-code" placeholder="02, P, T или F" required>
+                        <select name="tariff_tables-NEW_INDEX-table_type_code" class="form-select table-type-code" required>
+                            <option value="" disabled selected>Выберите тип...</option>
+                            <option value="P">P</option>
+                            <option value="T">T</option>
+                            <option value="F">F</option>
+                        </select>
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Коды серий SS (через ";")</label>
-                    <input type="text" name="tariff_tables-NEW_INDEX-ss_series_codes" class="form-control ss-codes-input" placeholder="Коды серий SS через ';', напр. 15;20;58" required>
+                    <label class="form-label">Коды серий SS (без пробелов, через ";"). (В конце ";" ставить не нужно!)</label>
+                    <input type="text" name="tariff_tables-NEW_INDEX-ss_series_codes" class="form-control ss-codes-input" placeholder="Например: 28 или 15;20;58" required>
                 </div>
                 
                 <button type="button" class="btn btn-sm btn-outline-danger remove-tariff-table" onclick="removeTariffTableEntry(this)">Удалить таблицу</button>
@@ -151,20 +213,29 @@
         </div>
     `;
 
+    // Функция для генерации короткого ID
+    function generateUID() {
+        return 't' + Math.random().toString(36).substr(2, 9);
+    }
+
     /**
      * Добавляет новое поле для ввода тарифа.
      */
     function addTariffTableEntry() {
         const container = document.getElementById('tariff-tables-container');
         const count = container.querySelectorAll('.tariff-table-entry').length;
+        const newUid = generateUID();
         
-        // Проверка лимита в 15 таблиц
-        if (count >= 15) {
-            alert("Достигнут максимальный лимит: 15 тарифных таблиц.");
+        // Проверка лимита в 10 таблиц
+        if (count >= 10) {
+            alert("Достигнут максимальный лимит: 10 тарифных таблиц.");
             return;
         }
 
-        let newHtml = tariffTableTemplate.replace(/NEW_INDEX/g, count);
+        let newHtml = tariffTableTemplate
+            .replace(/NEW_INDEX/g, count)
+            .replace(/NEW_LABEL/g, count + 1)
+            .replace(/NEW_UID/g, newUid); // Подставляем ID в скрытое поле
         container.insertAdjacentHTML('beforeend', newHtml);
         
         // Обновление заголовков и состояния полей после добавления
@@ -173,16 +244,15 @@
 
     /**
      * Удаляет поле тарифа и пересчитывает индексы.
-     * ЭТОТ ФУНКЦИОНАЛ ИСПРАВЛЕН
      */
     function removeTariffTableEntry(button) {
         const container = document.getElementById('tariff-tables-container');
         const entry = button.closest('.tariff-table-entry');
-        
         const entries = container.querySelectorAll('.tariff-table-entry');
+
         const index = Array.from(entries).indexOf(entry);
         
-        // 💥 Запрет на удаление Таблицы 1
+        // Запрет на удаление Таблицы 1
         if (index === 0) {
             alert("Таблицу 1 удалить нельзя. Маршрут должен иметь хотя бы одну таблицу.");
             return;
@@ -217,26 +287,28 @@
         container.querySelectorAll('.tariff-table-entry').forEach((entry, index) => {
             const title = entry.querySelector('h5.card-title');
             const removeButton = entry.querySelector('.remove-tariff-table');
-            const typeCodeInput = entry.querySelector('.table-type-code');
+            const typeCodeField = entry.querySelector('.table-type-code');
 
             // Устанавливаем заголовок
-            title.textContent = 'Таблица ' + (index + 1);
+            if (title) title.textContent = 'Таблица ' + (index + 1);
             
             if (index === 0) {
-                // Таблица 1: Код должен быть "02", кнопка удаления скрыта
-                if (typeCodeInput) {
-                    typeCodeInput.value = '02'; // Устанавливаем "02"
-                    typeCodeInput.setAttribute('readonly', true);
+                // Таблица 1: Код сериb должен быть "02", кнопка удаления скрыта
+                if (typeCodeField) {
+                    // typeCodeField.value = '02'; // Устанавливаем "02"
+                    // typeCodeField.setAttribute('readonly', true);
+                    typeCodeField.value = '02';
+                    typeCodeField.readOnly = true;
                 }
                 if (removeButton) removeButton.style.display = 'none';
             } else {
                 // Остальные таблицы: Можно редактировать и удалять
-                if (typeCodeInput) {
-                    typeCodeInput.removeAttribute('readonly');
-                    // Сбрасываем "02", если поле было скопировано из первой таблицы
-                    if (typeCodeInput.value === '02') typeCodeInput.value = ''; 
-                }
-                if (removeButton) removeButton.style.display = 'inline-block'; 
+                    if (removeButton) removeButton.style.display = 'inline-block';
+                    // Если поле было readonly (от первой таблицы), разрешаем редактирование
+                    if (typeCodeField && typeCodeField.tagName === 'INPUT' && typeCodeField.readOnly) {
+                        typeCodeField.readOnly = false;
+                        if (typeCodeField.value === '02') typeCodeField.value = '';
+                    }
             }
         });
     }
@@ -254,6 +326,24 @@
         if (submitButton) {
             submitButton.disabled = true;
             submitButton.textContent = 'Сохранение...';
+        }
+    });
+
+    document.addEventListener('input', function (event) {
+        // Проверяем, что изменение произошло в поле кода таблицы
+        if (event.target && event.target.name && event.target.name.includes('table_type_code')) {
+            let input = event.target;
+            let start = input.selectionStart;
+            let end = input.selectionEnd;
+
+            // Автоматически переводим в заглавные и убираем пробелы
+            let newValue = input.value.toUpperCase().replace(/\s/g, '');
+            
+            if (input.value !== newValue) {
+                input.value = newValue;
+                // Возвращаем курсор на место (чтобы он не прыгал в конец)
+                input.setSelectionRange(start, end);
+            }
         }
     });
 

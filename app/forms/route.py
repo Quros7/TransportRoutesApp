@@ -1,8 +1,8 @@
 from decimal import Decimal
 
 from flask_wtf import FlaskForm
-from wtforms import FieldList, FormField, HiddenField, SelectField, StringField, SubmitField
-from wtforms.validators import DataRequired, ValidationError
+from wtforms import DateField, FieldList, FormField, HiddenField, SelectField, StringField, SubmitField
+from wtforms.validators import DataRequired, Regexp, ValidationError, Length
 
 from app.constants import TRANSPORT_TYPE_CHOICES
 
@@ -13,6 +13,14 @@ from .tariff import TariffTableEntryForm
 
 # 1. Форма для Общей информации (Шаг 1)
 class RouteInfoForm(FlaskForm):
+    # owner_id = HiddenField("ID Владельца")
+
+    start_date = DateField(
+        "Дата начала действия", 
+        validators=[DataRequired(message="Укажите дату начала действия")],
+        format='%Y-%m-%d'
+    )
+    
     region_code = StringField(
         "Код региона (напр., 66)",
         validators=[DataRequired()],
@@ -38,9 +46,18 @@ class RouteInfoForm(FlaskForm):
     route_name = StringField("Название маршрута", validators=[DataRequired()])
 
     route_number = StringField(
-        "Номер маршрута (напр., 854)",
-        validators=[DataRequired()],
-        filters=[lambda x: x.zfill(6) if x else x],
+        "Номер маршрута (напр., 854, 651/66, 854у)",
+        validators=[
+            DataRequired(message="Это поле обязательно для заполнения"),
+            Length(max=6, message="Номер не может быть длиннее 6 символов"),
+            Regexp(
+                r"^[0-9a-zA-Zа-яА-Я/\-]*$", 
+                message="Используйте только цифры, буквы, тире или дробь"
+            )
+        ],
+        filters=[lambda x: x]
+        # filters=[lambda x: x.zfill(6) if x else x],
+        # filters=[lambda x: x.zfill(6) if (x and x.isdigit()) else x],
     )
 
     transport_type = SelectField(
@@ -53,7 +70,7 @@ class RouteInfoForm(FlaskForm):
     tariff_tables = FieldList(
         FormField(TariffTableEntryForm),
         min_entries=1,
-        max_entries=15,  # <-- Максимальное количество 15 таблиц
+        max_entries=10,  # <-- Максимальное количество 10 таблиц
         label="Тарифные Таблицы (TabN)",
     )
 
@@ -62,23 +79,30 @@ class RouteInfoForm(FlaskForm):
     def validate(self, extra_validators=None):
         """Override validate to use Pydantic validation."""
         # First run WTForms validation for CSRF and basic field validation
-        if not super().validate(extra_validators=extra_validators):
+        standard_valid = super().validate(extra_validators=extra_validators)
+        if not standard_valid:
             return False
-
+        
         # Now validate with Pydantic
         try:
             # Convert form data to Pydantic model
+
+            # Конвертируем дату в формат YYMMDD
+            formatted_date = self.start_date.data.strftime("%y%m%d") if self.start_date.data else ""
+
             tariff_tables_data = [
                 {
                     "tariff_name": entry.form.tariff_name.data or "",
                     "table_type_code": entry.form.table_type_code.data or "",
                     "ss_series_codes": entry.form.ss_series_codes.data or "",
+                    "uid": entry.form.uid.data,
                 }
                 for entry in self.tariff_tables.entries
-                if entry.form.tariff_name.data or entry.form.table_type_code.data or entry.form.ss_series_codes.data
+                # if entry.form.tariff_name.data or entry.form.table_type_code.data or entry.form.ss_series_codes.data
             ]
 
             route_data = {
+                "start_date": formatted_date,
                 "region_code": self.region_code.data,
                 "carrier_id": self.carrier_id.data,
                 "unit_id": self.unit_id.data,
@@ -94,26 +118,67 @@ class RouteInfoForm(FlaskForm):
             return True
 
         except Exception as e:
-            # Map Pydantic errors back to WTForms
+            # Собираем список сообщений, которые мы уже "пристроили" к полям,
+            # чтобы они не дублировались в верхнем розовом блоке.
+            assigned_errors = set()
+
             for error in e.errors():
-                field_path = error["loc"]
-                if len(field_path) == 1:
-                    # Top-level field
+                field_path = list(error["loc"])
+                raw_msg = error["msg"]
+                
+                # Убираем техническую приставку Pydantic, сохраняя регистр букв
+                clean_msg = raw_msg.replace("Value error, ", "")
+
+                # 1. Специфическая фильтрация системного мусора Pydantic
+                # Игнорируем пустые скобки и дампы словарей, которые пугают пользователя
+                if clean_msg.strip() in ["{}", "[]", ""] or "{'" in clean_msg:
+                    continue
+
+                # 2. Обработка ошибок КОНКРЕТНЫХ ПОЛЕЙ внутри таблиц
+                # Путь выглядит так: ['tariff_tables', 0, 'stop_name']
+                if len(field_path) == 3 and field_path[0] == "tariff_tables":
+                    table_idx = field_path[1]
+                    subfield_name = field_path[2]
+                    
+                    if table_idx < len(self.tariff_tables.entries):
+                        entry = self.tariff_tables.entries[table_idx]
+                        if hasattr(entry.form, subfield_name):
+                            target_field = getattr(entry.form, subfield_name)
+                            if clean_msg not in target_field.errors:
+                                target_field.errors.append(clean_msg)
+                                assigned_errors.add(clean_msg)
+                    continue
+
+                # 3. Обработка нашего кастомного маркера ID:index:field (из models.py)
+                if "ID:" in clean_msg:
+                    try:
+                        # Формат: "ID:0:table_type_code:Сообщение"
+                        _, idx, subfield, msg = clean_msg.split(":", 3)
+                        idx = int(idx)
+                        if idx < len(self.tariff_tables.entries):
+                            entry = self.tariff_tables.entries[idx]
+                            target_field = getattr(entry.form, subfield)
+                            if msg not in target_field.errors:
+                                target_field.errors.append(msg)
+                                assigned_errors.add(msg)
+                        continue
+                    except (ValueError, AttributeError):
+                        pass
+
+                # 4. Обработка ОБЩИХ ошибок списка таблиц (например, "минимум 1 таблица")
+                if field_path == ["tariff_tables"]:
+                    if clean_msg not in self.tariff_tables.errors and clean_msg not in assigned_errors:
+                        self.tariff_tables.errors.append(clean_msg)
+                    continue
+
+                # 5. Обработка всех остальных полей формы (верхний уровень)
+                if len(field_path) > 0:
                     field_name = field_path[0]
                     if hasattr(self, field_name):
-                        getattr(self, field_name).errors.append(error["msg"])
-                elif len(field_path) >= 2 and field_path[0] == "tariff_tables":
-                    # Tariff table error
-                    table_index = field_path[1]
-                    if len(field_path) >= 3:
-                        subfield = field_path[2]
-                        if table_index < len(self.tariff_tables.entries):
-                            entry = self.tariff_tables.entries[table_index]
-                            if hasattr(entry.form, subfield):
-                                getattr(entry.form, subfield).errors.append(error["msg"])
-                    else:
-                        # General tariff table error
-                        self.tariff_tables.errors.append(error["msg"])
+                        target_field = getattr(self, field_name)
+                        if clean_msg not in target_field.errors:
+                            target_field.errors.append(clean_msg)
+
             return False
 
 
@@ -161,7 +226,6 @@ class RouteStopsForm(FlaskForm):
 
         except Exception as e:
             # Map Pydantic errors back to WTForms
-            print("Pydantic validation errors:", e.errors())  # Debug print
             for error in e.errors():
                 field_path = error["loc"]
                 if len(field_path) >= 2 and field_path[0] == "stops":
@@ -188,16 +252,20 @@ class RouteStopsForm(FlaskForm):
         # 1. Проверяем минимальное количество остановок
         # Если маршрут НЕ городской (0x02), требуем минимум 2 остановки.
         # Если городской (0x02), достаточно 1 (Остановка 0).
-        is_city_route = self.route and self.route.transport_type == "0x02"
+        # is_city_route = self.route and self.route.transport_type == "0x02"
 
-        if not is_city_route and len(field.entries) < 2:
-            route_transport_type = TRANSPORT_TYPE_CHOICES.get(self.route.transport_type, self.route.transport_type)
-            raise ValidationError(f"Маршрут с типом транспортного средства {route_transport_type} должен содержать минимум 2 остановки (начальную и конечную).")
+        # if not is_city_route and len(field.entries) < 2:
+        #     route_transport_type = TRANSPORT_TYPE_CHOICES.get(self.route.transport_type, self.route.transport_type)
+        #     raise ValidationError(f"Маршрут с типом транспортного средства {route_transport_type} должен содержать минимум 2 остановки (начальную и конечную).")
 
         # Если маршрут городской (0x02), и остановок больше 1, это ошибка,
         # но мы контролируем это на фронтенде и JS. На всякий случай:
-        if is_city_route and len(field.entries) > 1:
-            raise ValidationError("Городской маршрут может содержать только одну зону (Остановка 0).")
+        # if is_city_route and len(field.entries) > 1:
+        #     raise ValidationError("Городской маршрут может содержать только одну зону (Остановка 0).")
+
+        # Новая общая проверка
+        if len(field.entries) < 1:
+            raise ValidationError("Необходимо добавить хотя бы одну остановку.")
 
         previous_km = Decimal("-1.0")  # Начинаем с отрицательного числа для первой проверки
 

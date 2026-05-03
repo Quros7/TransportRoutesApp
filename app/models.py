@@ -23,6 +23,9 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return f"<User {self.username}>"
+    
+    def __str__(self):
+        return f"{self.username} (ID: {self.id})"
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -38,13 +41,17 @@ def load_user(usr_id):
 
 class Route(db.Model):
     id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    
     user_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey(User.id), index=True)
+    user: so.Mapped["User"] = so.relationship("User", backref="routes")
 
-    # СТАРЫЕ ПОЛЯ
     route_name: so.Mapped[str] = so.mapped_column(sa.String(128))
     transport_type: so.Mapped[str] = so.mapped_column(sa.String(4))
 
-    # НОВЫЕ ПОЛЯ ДЛЯ КОНФИГУРАЦИИ
+    start_date: so.Mapped[str | None] = so.mapped_column(sa.String(6), nullable=True)
+    updated_at: so.Mapped[str | None] = so.mapped_column(sa.String(32), nullable=True)
+
+    # ПОЛЯ ДЛЯ КОНФИГУРАЦИИ
     carrier_id: so.Mapped[str] = so.mapped_column(sa.String(10))
     unit_id: so.Mapped[str] = so.mapped_column(sa.String(10))
     route_number: so.Mapped[str] = so.mapped_column(sa.String(10))
@@ -62,6 +69,9 @@ class Route(db.Model):
 
     def __repr__(self):
         return f"<Route {self.route_name}>"
+    
+    def __str__(self):
+        return f"{self.route_name} №{self.route_number}"
 
 
 class AuditLog(db.Model):

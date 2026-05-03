@@ -1,5 +1,7 @@
+from datetime import date
+
 from flask_wtf import FlaskForm
-from wtforms import SelectField, StringField
+from wtforms import DateField, SelectField, StringField
 from wtforms.validators import DataRequired, Length, Regexp
 
 
@@ -45,4 +47,4 @@ class BulkGenerateForm(FlaskForm):
         validators=[DataRequired()],
     )
 
-    # submit-кнопка нам не нужна, так как мы будем использовать существующую кнопку "Создать конфигурацию"
+    start_date = DateField('Дата начала действия', default=date.today, format='%Y-%m-%d')

@@ -3,18 +3,24 @@ import io
 import json
 from copy import deepcopy
 from datetime import datetime
+import re
 from urllib.parse import parse_qs
 
 import sqlalchemy as sa
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
+from sqlalchemy.orm import joinedload
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for, jsonify
 from flask_login import current_user, login_required
 from flask_wtf.csrf import generate_csrf
 
 from app import db
 from app.audit import log_action, serialize_route
 from app.forms import BulkGenerateForm, ImportRouteForm, RouteInfoForm, RoutePricesForm, RouteStopsForm
-from app.models import Route
+from app.forms.models import RouteInfoModel
+from app.models import Route, User
 from app.utils import write_route_body_to_buffer
+
+from app.services.importers.excel_importer import ExcelRouteImporter
+from app.services.importers.trfz_importer import TRFZRouteImporter
 
 bp = Blueprint("route_management", __name__)
 
@@ -29,6 +35,12 @@ def route_list():
     # Явно передаем CSRF-токен в шаблон
     # Используем функцию generate_csrf(), чтобы получить строковое значение токена.
     csrf_token = generate_csrf()
+
+    users = []
+    if current_user.is_admin:
+        users = db.session.execute(
+            sa.select(User).order_by(User.username)
+        ).scalars().all()
 
     # Инициализируем форму для массовой генерации
     bulk_form = BulkGenerateForm()
@@ -54,12 +66,49 @@ def route_list():
     return render_template(
         "route_list.html",
         routes=routes,
-        #    TRANSPORT_TYPES=TRANSPORT_TYPE_CHOICES,
-        csrf_token=csrf_token,  # Это нужно для формы
+        csrf_token=csrf_token,
         bulk_form=bulk_form,
-    )  # <-- ПЕРЕДАЕМ НОВУЮ ФОРМУ
+        users=users
+    )
 
-    # return render_template('route_list.html', routes=routes, csrf_token=csrf_token)
+
+# --- Список всех маршрутов системы (для администраторов) ---
+@bp.route("/all-routes")
+@login_required
+def route_list_admin():
+    # Проверка прав: только админ может войти сюда
+    if not current_user.is_admin:
+        flash("Доступ запрещен.", "danger")
+        return redirect(url_for("route_management.route_list"))
+
+    # Загружаем все маршруты и сразу подтягиваем данные пользователей
+    query = (
+        sa.select(Route)
+        .join(User) 
+        .options(joinedload(Route.user))
+        .order_by(User.username, Route.id)
+    )
+    
+    routes = db.session.scalars(query).all()
+
+    csrf_token = generate_csrf()  # Генерируем CSRF токен для использования в шаблоне (например, для массового удаления)
+
+    users = []
+    if current_user.is_admin:
+        users = db.session.execute(
+            sa.select(User).order_by(User.username)
+        ).scalars().all()
+
+    bulk_form = BulkGenerateForm()  # Форма для массовой генерации (можно использовать ту же, что и для пользователей)
+
+    if current_user.default_region_code:
+        bulk_form.region_code.data = current_user.default_region_code
+    if current_user.default_carrier_id:
+        bulk_form.carrier_id.data = current_user.default_carrier_id
+    if current_user.default_unit_id:
+        bulk_form.unit_id.data = current_user.default_unit_id
+    
+    return render_template("route_list_admin.html", routes=routes, csrf_token=csrf_token, bulk_form=bulk_form, users=users)
 
 
 # --- Создание ИЛИ Редактирование Общей информации (Шаг 1) ---
@@ -68,32 +117,47 @@ def route_list():
 @bp.route("/route/edit/info/<int:route_id>", methods=["GET", "POST"])
 @login_required
 def create_or_edit_route_info(route_id):
-
     # Инициализация переменной 'route' для предотвращения UnboundLocalError
     route = None
+    users = [] # Список для выбора владельца маршрута (только для админов)
+
+    next = request.args.get('next')  # Получаем параметр 'next' из URL, если он есть
+
+    # Если админ, подгружаем всех пользователей
+    if current_user.is_admin:
+        users = db.session.execute(sa.select(User).order_by(User.username)).scalars().all()
 
     if route_id is not None:
         # --- РЕЖИМ РЕДАКТИРОВАНИЯ ---
 
-        # 1. Загрузка существующего маршрута
-        route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
+        # Загрузка существующего маршрута из базы данных
+        # Если админ — ищем просто по ID, если нет — по ID и владельцу
+        if current_user.is_admin:
+            route = db.session.scalar(sa.select(Route).where(Route.id == route_id))
+        else:
+            route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
 
         if route is None:
-            # Маршрут не найден или принадлежит другому пользователю
-            flash("Маршрут не найден.", "danger")
-            return redirect(url_for("route_management.route_list"))
-
-        # 2. Инициализация формы существующими данными
-        # obj=route загружает все скалярные поля (route_name, carrier_id и т.д.)
-        # Примечание: data=dict(tariffs=route.tariffs) необходим для корректной загрузки
-        # FieldList с подформами (TariffForm), хранящимися в JSON.
+            flash("Маршрут не найден или у вас нет прав на его редактирование.", "danger")
+            return redirect(next or url_for("route_management.route_list"))
+        
+        # Создаем форму. obj=route заполнит все текстовые поля (name, number и т.д.)
         form = RouteInfoForm(obj=route, data={"tariff_tables": route.tariff_tables})
-        # Позволяем Flask-WTF работать с динамически удаленными/добавленными полями
         form.tariff_tables.min_entries = 0
+
+        # ПЕРЕЗАПИСЫВАЕМ дату объектом date, если это GET-запрос, чтобы в поле попал тип date, а не str из БД
+        if request.method == "GET" and route.start_date:
+            try:
+                form.start_date.data = datetime.strptime(route.start_date, "%y%m%d").date()
+            except Exception as e:
+                print(f"Ошибка парсинга даты: {e}")
+                form.start_date.data = None
 
     else:
         # --- РЕЖИМ СОЗДАНИЯ ---
         form = RouteInfoForm()
+
+        form.start_date.data = datetime.now().date()
 
         # Предзаполнение полей из профиля пользователя (current_user)
         # Эта логика выполняется только в режиме создания, до обработки POST-запроса,
@@ -106,21 +170,41 @@ def create_or_edit_route_info(route_id):
             form.unit_id.data = current_user.default_unit_id
 
     if form.validate_on_submit():
+        # --- ДЕБАГ ---
+        print("--- DEBUG UPDATE ---")
+        print(f"ID Маршрута: {route.id if route else 'New'}")
+        print(f"Админ ли сейчас: {current_user.is_admin}")
+        print(f"Данные из request.form (owner_id): {request.form.get('owner_id')}")
+        # --- --- ---
+
+        # Конвертируем дату из формы обратно в строку YYMMDD
+        new_start_date_str = form.start_date.data.strftime("%y%m%d")
+
         # 1. Сбор данных тарифных таблиц
         tariff_tables_data = []
         for i, t in enumerate(form.tariff_tables.entries):
+            table_uid = t.form.uid.data
             # 1. Получаем строку, которую ввел пользователь
-            raw_ss_codes_string = t.form.ss_series_codes.data
+            #   raw_ss_codes_string = t.form.ss_series_codes.data
+            # Если поле пустое (для Таблицы 1), используем пустую строку
+            raw_ss_codes_string = t.form.ss_series_codes.data or ""
             # 2. Парсим строку серий SS
+            #   ss_codes_list = [c.strip() for c in raw_ss_codes_string.split(";") if c.strip()]
+            # Безопасный сплит: сработает даже на пустой строке
             ss_codes_list = [c.strip() for c in raw_ss_codes_string.split(";") if c.strip()]
 
+            # Принудительная логика типов
+            type_code = "02" if i == 0 else t.form.table_type_code.data
+
             table_entry = {
+                # UID для связи с матрицей цен
+                "uid": table_uid,
                 # Номер таблицы (TabN)
                 "tab_number": i + 1,
                 # Название тарифа (для Шага 3 и отображения)
                 "tariff_name": t.form.tariff_name.data,
                 # Тип таблицы (Стартовый код: '02', 'P', 'T', 'F')
-                "table_type_code": t.form.table_type_code.data,
+                "table_type_code": type_code,
                 # Коды серий SS (список значений, без стартового кода)
                 "ss_series_codes": raw_ss_codes_string,
                 # Сохраняем распарсенный список под другим именем (опционально, но полезно).
@@ -130,6 +214,7 @@ def create_or_edit_route_info(route_id):
 
         # 2. Общие данные для сохранения
         data_to_save = {
+            "start_date": new_start_date_str,
             "route_name": form.route_name.data,
             "transport_type": form.transport_type.data,
             "carrier_id": form.carrier_id.data,
@@ -142,7 +227,15 @@ def create_or_edit_route_info(route_id):
 
         if route is None:
             # --- Создание нового объекта Route ---
-            new_route = Route(user_id=current_user.id, stops=[], price_matrix=[], **data_to_save)
+
+            # Если админ выбрал кого-то в поле owner_id, ставим его, иначе — себя
+            owner_id = request.form.get("owner_id", type=int) if current_user.is_admin else current_user.id
+
+            new_route = Route(
+                updated_at=datetime.now().isoformat(),
+                user_id=owner_id, 
+                stops=[], price_matrix=[], 
+                **data_to_save)
             db.session.add(new_route)
             db.session.flush()
             log_action(
@@ -158,29 +251,69 @@ def create_or_edit_route_info(route_id):
                 "success",
             )
             # Переход к Шагу 2
-            return redirect(url_for("route_management.edit_route_stops", route_id=new_route.id))
+            return redirect(url_for("route_management.edit_route_stops", route_id=new_route.id, next=next))
 
         else:
             # --- Обновление существующего объекта Route ---
-
-            # 1. Запоминаем критические состояния ДО обновления
+            
+            # Запоминаем критические состояния ДО обновления
             before_snapshot = serialize_route(route)
-            old_transport_type = route.transport_type
-            old_tariffs = route.tariff_tables  # Это список словарей JSON
 
-            # 2. Обновляем поля
+            # Запоминаем критические состояния ДО обновления
+            # before_snapshot = serialize_route(route)
+            # old_transport_type = route.transport_type
+            # old_tariffs = route.tariff_tables  # Это список словарей JSON
+
+            # Нужно проверить, изменилось ли что-то существенное. Сравниваем словари. 
+            # data_to_save содержит: name, type, ids, number, region, decimal, tariffs, start_date.
+            has_changes = False
+            
+            # Проверка смены владельца
+            if current_user.is_admin:
+                new_owner_id = request.form.get("owner_id", type=int)
+                print(f"Старый владелец: {route.user_id}, Новый выбранный: {new_owner_id}")
+                
+                if new_owner_id is not None and route.user_id != new_owner_id:
+                    print(f"СМЕНА ВЛАДЕЛЬЦА: с {route.user_id} на {new_owner_id}")
+                    route.user_id = new_owner_id
+                    print(f"ID владельца изменен на: {route.user_id}")
+                    has_changes = True
+
+            for key, value in data_to_save.items():
+                if getattr(route, key) != value:
+                    has_changes = True
+                    print("ИЗМЕНЕНИЯ:\n", "ДО:", getattr(route, key), "\nПосле:", value)
+                    break
+
+            # Обновляем поля
             for key, value in data_to_save.items():
                 setattr(route, key, value)
+            
+            # АВТОМАТИЧЕСКАЯ ОЧИСТКА МАТРИЦЫ ЦЕН
+            active_uids = [str(t["uid"]) for t in tariff_tables_data] # Список активных UID
+            
+            cleaned_price_matrix = []
+            for row in route.price_matrix:
+                new_row = []
+                for cell in row:
+                    if isinstance(cell, dict):
+                        # Оставляем только те ключи (цены), чьи тарифы (UID) не были удалены
+                        filtered_cell = {k: v for k, v in cell.items() if str(k) in active_uids}
+                        new_row.append(filtered_cell)
+                    else:
+                        new_row.append(cell)
+                cleaned_price_matrix.append(new_row)
+            
+            # Перезаписываем матрицу очищенной версией
+            route.price_matrix = cleaned_price_matrix
 
-            # 3. ЛОГИКА УМНОГО СБРОСА
-            # Сравниваем тип транспорта и состав тарифных таблиц
-            # В Python списки словарей (tariff_tables_data vs old_tariffs) сравниваются глубоко по значениям
-            if old_transport_type != form.transport_type.data or old_tariffs != tariff_tables_data:
-                route.is_completed = False  # Матрица цен теперь требует перепроверки
-                flash(
-                    "Структура тарифов или тип транспорта изменились. Пожалуйста, проверьте цены на Шаге 3.",
-                    "info",
-                )
+            # Логика сброса флага готовности (используем уже имеющиеся переменные)
+            # Если изменились тарифы или тип транспорта
+            if before_snapshot.get('transport_type') != data_to_save['transport_type'] or \
+               before_snapshot.get('tariff_tables') != data_to_save['tariff_tables']:
+                
+                route.is_completed = False
+                flash("Структура тарифов или тип транспорта изменились. Проверьте цены на Шаге 3.", "info")
 
             log_action(
                 action="route_info_updated",
@@ -188,32 +321,50 @@ def create_or_edit_route_info(route_id):
                 route_id=route.id,
                 details={"before": before_snapshot, "after": serialize_route(route)},
             )
-            db.session.commit()
-            flash("Изменения сохранены.", "success")
-            # Переход к Шагу 2
-            return redirect(url_for("route_management.edit_route_stops", route_id=route.id))
 
-    # --- GET-запрос (или валидация не пройдена) ---
+            if has_changes:
+                route.updated_at = datetime.now().isoformat() # Добавляем дату правок
+                db.session.commit()
+                print("Изменения закоммичены в БД")
+                flash("Изменения сохранены.", "success")
+            else:
+                flash("Изменений не обнаружено.", "secondary")
+            
+            # Переход к Шагу 2
+            return redirect(url_for("route_management.edit_route_stops", route_id=route.id, next=next))
+    else:
+        # ВРЕМЕННО: выводим все ошибки формы в консоль сервера
+        print(f"Ошибки формы: {form.errors}")
 
     # Устанавливаем заголовок страницы
-    title = "Создание маршрута: Шаг 1" if route is None else f"Редактирование маршрута: {route.route_name}"
+    title = "Создание маршрута: Шаг 1" if route is None else f"Редактирование маршрута: Шаг 1"
 
-    return render_template("route_info_form.html", form=form, route=route, title=title)
+    return render_template("route_info_form.html", form=form, route=route, title=title, users=users, next=next)
 
 
 # --- Редактирование/Заполнение остановок (Этап 2) ---
 @bp.route("/route/edit/<int:route_id>/stops", methods=["GET", "POST"])
 @login_required
 def edit_route_stops(route_id):
-    route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
+    next = request.args.get('next')
+
+    if current_user.is_admin:
+        route = db.session.get(Route, route_id)
+    else:
+        route = db.session.scalar(sa.select(Route).where(
+            Route.id == route_id, 
+            Route.user_id == current_user.id
+        ))
     if route is None:
-        abort(404)
+        # abort(404)
+        flash("Такого маршрута не существует.", "danger")
+        return redirect(next or url_for("route_management.route_list"))
 
     if request.method == "POST":
         # Важный момент: WTForms сам разберет request.form,
         # если названия полей в JS (stops-N-...) совпадают с ожиданиями FieldList
         form = RouteStopsForm(request.form, route=route)
-        print(f"DEBUG: Полученные ключи формы: {list(request.form.keys())}")
+        # print(f"DEBUG: Полученные ключи формы: {list(request.form.keys())}")
     else:
         # Для GET создаем форму и наполняем её данными из БД
         form = RouteStopsForm(route=route)
@@ -252,7 +403,12 @@ def edit_route_stops(route_id):
         before_is_completed = route.is_completed
         if route.stops != new_stop_data:
             route.is_completed = False
-            flash("Состав остановок изменился. Пожалуйста, проверьте цены.", "warning")
+            route.updated_at = datetime.now().isoformat() # Добавляем дату правок
+            flash("Состав остановок изменился. Пожалуйста, проверьте цены.", "info")
+            flash("Изменения сохранены.", "success")
+            print("ИЗМЕНЕНИЯ ОСТАНОВОК:\nДО:", route.stops, "\nПосле:", new_stop_data)
+        else:
+            flash("Остановки сохранены. Изменений не обнаружено.", "secondary")
 
         route.stops = new_stop_data
         route.stops_set = True
@@ -269,12 +425,11 @@ def edit_route_stops(route_id):
         )
         db.session.commit()
 
-        flash("Остановки сохранены.", "success")
-        return redirect(url_for("route_management.edit_route_prices", route_id=route.id))
+        return redirect(url_for("route_management.edit_route_prices", route_id=route.id, next=next))
 
     # 2. ЕСЛИ ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)
     elif request.method == "POST":
-        print("DEBUG: ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)")
+        # print("DEBUG: ВАЛИДАЦИЯ НЕ ПРОШЛА (POST)")
         # Собираем ошибки из всех уровней формы
         for field, errors in form.errors.items():
             if isinstance(errors, list):
@@ -292,44 +447,31 @@ def edit_route_stops(route_id):
         form=form,
         route=route,
         title="Редактирование остановок: Шаг 2",
+        next=next,
     )
-    # ruff: disable[ERA001]
-    # Если ни одна из кнопок не была нажата (что маловероятно при form.validate_on_submit),
-    # или если были другие submit-кнопки.
-    # Fallthrough to render_template below for validation errors.
-
-    # 3. ОБРАБОТКА GET-ЗАПРОСА (инициализация данных)
-    if request.method == "GET" and route.stops:
-        # Очищаем FieldList перед заполнением, чтобы избежать дублирования
-        form.stops.entries = []
-        for stop_data in route.stops:
-            # Преобразуем строку 'km' из БД обратно в float для формы
-            try:
-                km_for_form = float(stop_data["km"])
-            except (TypeError, ValueError):
-                # Если по какой-то причине значение некорректно, ставим 0.0
-                km_for_form = 0.0
-
-            # При инициализации формы km_distance лучше передавать как str или float,
-            # если он был сохранен как float, но DecimalField справится с float.
-            form.stops.append_entry({"stop_name": stop_data["name"], "km_distance": km_for_form})
-
-    # 3. РЕНДЕРИНГ ШАБЛОНА
-    return render_template("route_stops_form.html", form=form, route=route, title="Редактирование остановок: Шаг 2")
 
 
 # --- Форма с ценами за каждый отрезок пути (Этап 3) ---
 @bp.route("/route/edit/<int:route_id>/prices", methods=["GET", "POST"])
 @login_required
 def edit_route_prices(route_id):
-    route = db.session.get(Route, route_id)
+    next = request.args.get('next')
+
+    if current_user.is_admin:
+        route = db.session.get(Route, route_id)
+    else:
+        route = db.session.scalar(sa.select(Route).where(
+            Route.id == route_id, 
+            Route.user_id == current_user.id
+        ))
+    
     if not route:
         flash("Маршрут не найден.", "danger")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(next or url_for("route_management.route_list"))
 
     if not route.stops_set:
         flash("Сначала настройте список остановок!", "warning")
-        return redirect(url_for("route_management.edit_route_stops", route_id=route.id))
+        return redirect(url_for("route_management.edit_route_stops", route_id=route.id, next=next))
 
     # === Правильно: создаём форму БЕЗ request.form ===
     form = RoutePricesForm()
@@ -343,13 +485,13 @@ def edit_route_prices(route_id):
         except Exception as e:
             form_dict = f"can't read request.form: {e}"
 
-        current_app.logger.info("DEBUG INCOMING POST — request.form keys & previews: %s", form_dict)
+        #current_app.logger.info("DEBUG INCOMING POST — request.form keys & previews: %s", form_dict)
         raw_body = request.get_data(as_text=True) or ""
-        current_app.logger.info(
-            "DEBUG INCOMING POST — raw body length=%s preview=%s",
-            len(raw_body),
-            raw_body[:500],
-        )
+        # current_app.logger.info(
+        #     "DEBUG INCOMING POST — raw body length=%s preview=%s",
+        #     len(raw_body),
+        #     raw_body[:500],
+        # )
 
     # === Основная логика: валидируем форму (CSRF и пр.) ===
     if form.validate_on_submit():
@@ -396,7 +538,7 @@ def edit_route_prices(route_id):
         if not json_data or not str(json_data).strip():
             current_app.logger.warning("DEBUG (PY): Поле price_matrix_data пустое после всех попыток. НЕ будет перезаписано.")
             flash("Данные матрицы не получены. Попробуйте ещё раз.", "warning")
-            return redirect(url_for("route_management.route_list"))
+            return redirect(next or url_for("route_management.route_list"))
 
         # Теперь безопасно пробуем распарсить JSON
         try:
@@ -412,7 +554,47 @@ def edit_route_prices(route_id):
             new_matrix = json.loads(cleaned_string)
 
             if isinstance(new_matrix, list):
+                # Проходим по всем строкам, ячейкам и тарифам для очистки
+                for row in new_matrix:
+                    if isinstance(row, list):
+                        for cell in row:
+                            if isinstance(cell, dict):
+                                for t_id, val in cell.items():
+                                    try:
+                                        # Если прилетела строка с запятой (напр. "100,50")
+                                        if isinstance(val, str):
+                                            val = val.replace(',', '.')
+                                        # Принудительно превращаем во float и округляем
+                                        cell[t_id] = round(float(val if val else 0), 2)
+                                    except (ValueError, TypeError):
+                                        cell[t_id] = 0.0
+                
+                # Перед сравнением нормализуем СТАРУЮ матрицу из БД
+                # Чтобы в ней тоже не было пустых {} или строк вместо чисел
                 before_matrix = deepcopy(route.price_matrix)
+                normalized_before = deepcopy(before_matrix)
+                
+                for row in normalized_before:
+                    for cell in row:
+                        if isinstance(cell, dict):
+                            # Если в ячейке вообще нет тарифов (пустой {}), 
+                            # но в новой матрице они появились как 0.0 —
+                            # нам нужно добавить их в старую для честного сравнения.
+                            # Берем структуру ключей из первого тарифа (active_uids)
+                            for t_id in cell.keys():
+                                try:
+                                    cell[t_id] = round(float(cell[t_id]), 2)
+                                except:
+                                    cell[t_id] = 0.0
+
+                has_changes = (before_matrix != new_matrix)
+
+                # Дополнительная проверка на "пустоту": 
+                # Если разница только в том, что в базе был None или [], а пришел список с нулями
+                if not before_matrix and new_matrix:
+                    has_changes = True
+
+                # Сохраняем в базу
                 route.price_matrix = new_matrix
                 route.is_completed = True
 
@@ -420,11 +602,18 @@ def edit_route_prices(route_id):
                     action="route_prices_updated",
                     entity_type="route",
                     route_id=route.id,
-                    details={"before_price_matrix": before_matrix, "after_price_matrix": new_matrix},
+                    details={"before_price_matrix": before_matrix, "after_price_matrix": new_matrix, "changes_detected": has_changes},
                 )
-                db.session.commit()
-                flash("Цены успешно сохранены!", "success")
-                return redirect(url_for("route_management.route_list"))
+                
+                if has_changes:
+                    route.updated_at = datetime.now().isoformat() # Добавляем дату правок
+                    db.session.commit()
+                    flash("Цены успешно сохранены! Маршрут готов к экспорту.", "success")
+                    print("ИЗМЕНЕНИЯ ЦЕН:\nДО:", before_matrix, "\nПОСЛЕ:", new_matrix)
+                else:
+                    flash("Изменений в ценах не обнаружено. Маршрут готов к экспорту.", "secondary")
+
+                return redirect(next or url_for("route_management.route_list"))
             else:
                 current_app.logger.error("DEBUG (PY): json.loads вернул не list, а %s", type(new_matrix))
                 flash("Неверный формат данных матрицы (ожидался список).", "danger")
@@ -445,11 +634,12 @@ def edit_route_prices(route_id):
         "route_prices_matrix.html",
         form=form,
         route=route,
-        title=f"Редактирование цен: Шаг 3 ({route.route_name})",
+        title=f"Редактирование цен: Шаг 3",
+        next=next,
     )
 
 
-# --- Удаление маршрута из списка ---
+# --- Удаление одного маршрута из списка ---
 @bp.route("/route/delete/<int:route_id>", methods=["POST"])
 @login_required
 def delete_route(route_id):
@@ -459,19 +649,20 @@ def delete_route(route_id):
     # 1. Проверка существования маршрута
     if route is None:
         flash("Маршрут не найден.", "danger")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(request.referrer or url_for("route_management.route_list"))
 
     # 2. Проверка прав: Убедимся, что пользователь удаляет только свои маршруты
-    if route.user_id != current_user.id:
+    if route.user_id != current_user.id and not current_user.is_admin:
         log_action(
             action="route_delete_forbidden",
             entity_type="route",
             route_id=route.id,
-            details={"owner_id": route.user_id},
+            user_id=current_user.id,
+            details={"owner_id": route.user_id, "route_name": route.route_name},
         )
         db.session.commit()
         flash("У вас нет прав для удаления этого маршрута.", "danger")
-        return redirect(url_for("route_management.route_list"))
+        return redirect(request.referrer or url_for("route_management.route_list"))
 
     # 3. Удаление из базы данных
     try:
@@ -481,7 +672,8 @@ def delete_route(route_id):
             action="route_deleted",
             entity_type="route",
             route_id=before_snapshot["id"],
-            details={"before": before_snapshot},
+            user_id=current_user.id,
+            details={"owner_id": route.user_id, "deleted_route_name": route.route_name, "deleted_route_id": route.id, "before": before_snapshot},
         )
         db.session.commit()
         flash(f'Маршрут "{route.route_name}" успешно удален.', "success")
@@ -490,15 +682,77 @@ def delete_route(route_id):
         current_app.logger.error("Ошибка при удалении маршрута %s: %s", route_id, e)
         flash("Произошла ошибка при удалении маршрута.", "danger")
 
-    return redirect(url_for("route_management.route_list"))
+    return redirect(request.referrer or url_for("route_management.route_list"))
 
 
-# --- Генерация файла конфигурации для одного маршрута ---
+# --- Удаление нескольких маршрутов из списка ---
+@bp.route("/routes/delete_bulk", methods=["POST"])
+@login_required
+def delete_bulk_routes():
+    # Получаем ID из чекбоксов name="route_ids"
+    route_ids = request.form.getlist("route_ids")
+
+    if not route_ids:
+        flash("Не выбрано ни одного маршрута для удаления.", "warning")
+        return redirect(request.referrer or url_for("route_management.route_list"))
+
+    try:
+        # Загружаем маршруты, проверяя принадлежность пользователю
+        # Базовый запрос: выбираем маршруты по списку ID
+        query = sa.select(Route).where(Route.id.in_(route_ids))
+        
+        # Если пользователь НЕ админ, добавляем ограничение по владельцу
+        # Если админ — условие ниже просто не применится, и он получит все ID
+        if not current_user.is_admin:
+            query = query.where(Route.user_id == current_user.id)
+
+        # query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
+        routes = db.session.scalars(query).all()
+
+        if not routes:
+            flash("Маршруты для удаления не найдены или у вас нет прав.", "danger")
+            return redirect(request.referrer or url_for("route_management.route_list"))
+
+        count = len(routes)
+        for route in routes:
+            # Логируем каждое удаление (аналогично одиночному методу)
+            before_snapshot = serialize_route(route)
+            log_action(
+                action="route_deleted_bulk",
+                entity_type="route",
+                route_id=route.id,
+                user_id=current_user.id,
+                details={"owner_id": route.user_id, "deleted_route_name": route.route_name, "deleted_route_id": route.id, "before": before_snapshot},
+            )
+            db.session.delete(route)
+
+        db.session.commit()
+        flash(f"Успешно удалено маршрутов: {count}.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error("Ошибка при массовом удалении: %s", e)
+        flash("Произошла ошибка при массовом удалении маршрутов.", "danger")
+
+    return redirect(request.referrer or url_for("route_management.route_list"))
+
+
+# --- Генерация файла конфигурации для одного маршрута (экспорт TRFZ) ---
 @bp.route("/route/<int:route_id>/generate_config")
 @login_required
 def generate_config(route_id):
-    # 1. Загружаем маршрут
-    route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
+    # Загружаем маршрут
+    # Базовый запрос: выбираем маршрут по ID
+    query = sa.select(Route).where(Route.id == route_id)
+        
+    # Если пользователь НЕ админ, добавляем ограничение по владельцу
+    # Если админ — условие ниже просто не применится, и он получит все ID
+    if not current_user.is_admin:
+        query = query.where(Route.user_id == current_user.id)
+    
+    # route = db.session.scalar(sa.select(Route).where(Route.id == route_id, Route.user_id == current_user.id))
+    route = db.session.scalar(query)
+
     if not route:
         flash("Маршрут не найден.", "danger")
         return redirect(url_for("route_management.route_list"))
@@ -516,9 +770,11 @@ def generate_config(route_id):
     buffer = io.BytesIO()
 
     try:
+        start_date = str(route.start_date)
         current_date = datetime.now().strftime("%y%m%d")
+        current_time = datetime.now().strftime("%H%M%S")
         # ==========================================
-        # 1. ЗАГОЛОВОК ФАЙЛА
+        # ЗАГОЛОВОК ФАЙЛА
         # RR;TTTT;DDDD;YYMMDD;V
         # ==========================================
         # RR - Код региона (2 знака)
@@ -542,13 +798,14 @@ def generate_config(route_id):
         # Подготовка к отправке
         buffer.seek(0)
 
-        # Формируем имя файла (TRFZ_номер_дата.txt)
-        filename = f"TRFZ_{route.route_number}_{current_date}.txt"
+        # Формируем имя файла (Код региона_ID Перевозчика_ID Подразделения_Название маршрута_Дата)
+        filename = f"{route.region_code}_{route.carrier_id}_{route.unit_id}_TRFZ_start-date-{start_date}_saved-at-{current_date}_{current_time}"
         log_action(
             action="route_config_generated",
             entity_type="route",
             route_id=route.id,
-            details={"filename": filename},
+            details={"filename": filename, "route_id": route.id, "route_name": route.route_name},
+            user_id=current_user.id,
         )
         db.session.commit()
 
@@ -559,19 +816,30 @@ def generate_config(route_id):
         return redirect(url_for("route_management.route_list"))
 
 
-# --- Генерация файла конфигурации для нескольких маршрутов ---
+# --- Генерация файла конфигурации для нескольких маршрутов (экспорт TRFZ) ---
 @bp.route("/routes/generate_bulk_config", methods=["POST"])
 @login_required
 def generate_bulk_config():
-    # 1. Получаем список ID выбранных маршрутов из формы
-    # В HTML чекбоксы будут иметь name="route_ids"
-    route_ids = request.form.getlist("route_ids")
+    # Получаем ordered_ids — это ID в порядке, установленном пользователем
+    route_ids = request.form.getlist("ordered_ids")
 
-    # 2. Инициализируем и валидируем форму шапки
+    if not route_ids:
+        flash("Список маршрутов пуст.", "warning")
+        return redirect(url_for("route_management.route_list"))
+
+    # Лимит 10 маршрутов
+    if len(route_ids) > 10:
+        flash("Ошибка: В один файл можно включить не более 10 маршрутов.", "danger")
+        return redirect(url_for("route_management.route_list"))
+    
+    # Инициализируем и валидируем форму шапки
     # Если форма не пройдет валидацию, мы не сможем получить ее данные (data)
     bulk_form = BulkGenerateForm(request.form)
 
     if not bulk_form.validate():
+        print(f"DEBUG: Ошибки формы: {bulk_form.errors}")
+        print(f"DEBUG: CSRF в форме: {bulk_form.csrf_token.data}")
+        print(f"DEBUG: CSRF в запросе: {request.form.get('csrf_token')}")
         # Если валидация не удалась, мы не можем сгенерировать файл.
         # Сохраняем сообщение об ошибке (например, для первой ошибки)
         first_error = next(iter(bulk_form.errors.values()))[0]
@@ -579,200 +847,274 @@ def generate_bulk_config():
 
         # Перенаправляем обратно на список маршрутов (GET)
         return redirect(url_for("route_management.route_list"))
+    
+    # Получаем дату из формы
+    selected_date = bulk_form.start_date.data # Это объект datetime.date
+    header_date_str = selected_date.strftime("%y%m%d") # Формат YYMMDD для внутри файла
+    file_date_str = selected_date.strftime("%Y-%m-%d") # Формат для имени файла
+
+    # Данные шапки берем из скрытых полей страницы сортировки
+    region_code = request.form.get("region_code")
+    carrier_id = request.form.get("carrier_id")
+    unit_id = request.form.get("unit_id")
+    decimal_places = request.form.get("decimal_places")
+
+    # Загружаем маршруты
+    # Базовый запрос: выбираем маршруты по списку ID
+    query = sa.select(Route).where(Route.id.in_(route_ids))
+    
+    # Если пользователь НЕ админ, добавляем ограничение по владельцу
+    # Если админ — условие ниже просто не применится, и он получит все ID
+    if not current_user.is_admin:
+        query = query.where(Route.user_id == current_user.id)
+
+    # query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
+    routes_from_db = db.session.scalars(query).all()
+
+    # Выстраиваем маршруты в точном порядке из route_ids (от SortableJS)
+    routes_dict = {str(r.id): r for r in routes_from_db}
+    ordered_routes = [routes_dict[rid] for rid in route_ids if rid in routes_dict]
+
+    if not ordered_routes:
+        flash("Ошибка: маршруты не найдены.", "danger")
+        return redirect(url_for("route_management.route_list"))
 
     if not route_ids:
         flash("Не выбрано ни одного маршрута.", "warning")
         return redirect(url_for("route_management.route_list"))
-
-    # 3. Загружаем маршруты из БД (проверяя, что они принадлежат user_id)
-    # Используем .in_(route_ids) для фильтрации
-    query = sa.select(Route).where(Route.id.in_(route_ids), Route.user_id == current_user.id)
-    routes = db.session.scalars(query).all()
-
-    if not routes:
-        flash("Маршруты не найдены.", "danger")
-        return redirect(url_for("route_management.route_list"))
-
-    # 4. Валидация: Проверяем флаг is_completed
-    incomplete_routes = [r.route_name for r in routes if not r.is_completed]
-
-    if incomplete_routes:
-        flash(
-            f"Ошибка! Следующие маршруты не заполнены до конца: {', '.join(incomplete_routes)}. Заполните их перед генерацией.",
-            "danger",
-        )
-        return redirect(url_for("route_management.route_list"))
-
-    # Получаем значение точности цен из формы для использования в шапке и теле
-    decimal_places_value = bulk_form.decimal_places.data  # Значение V (0, 1 или 2)
-
-    # 5. Генерация файла
+    
     buffer = io.BytesIO()
-
-    # Вспомогательная функция для записи одной строки (для шапки)
     def write_line(text):
         buffer.write((text + "\r\n").encode("cp866", errors="replace"))
 
     try:
-        # --- ШАПКА ФАЙЛА (Берем данные из bulk_form.data) ---
         current_date = datetime.now().strftime("%y%m%d")
-
-        # ИСПОЛЬЗУЕМ ДАННЫЕ ИЗ ФОРМЫ (ОНИ УЖЕ ОТФИЛЬТРОВАНЫ и ВАЛИДИРОВАНЫ)
-        rr = bulk_form.region_code.data
-        tttt = bulk_form.carrier_id.data
-        dddd = bulk_form.unit_id.data
-        v = decimal_places_value
-
-        header_line = f"{rr};{tttt};{dddd};{current_date};{v}"
+        current_time = datetime.now().strftime("%H%M%S")
+        
+        # Шапка
+        header_line = f"{region_code};{carrier_id};{unit_id};{header_date_str};{decimal_places}"
         write_line(header_line)
 
-        # --- ТЕЛА МАРШРУТОВ ---
-        for route in routes:
-            # Используем нашу функцию рефакторинга
-            write_route_body_to_buffer(buffer, route, decimal_places_value)
+        # ТЕЛА МАРШРУТОВ (в нужном порядке)
+        for route in ordered_routes:
+            write_route_body_to_buffer(buffer, route, decimal_places)
 
-        # --- ОТПРАВКА ---
         buffer.seek(0)
-        filename = f"TRFZ_BULK_{current_date}_({len(routes)}routes).txt"
+        filename = f"{region_code}_{carrier_id}_{unit_id}_TRFZ_start-date-{file_date_str}_saved-{current_date}-at-{current_time}_({len(ordered_routes)}-routes)"
+        
         log_action(
-            action="routes_bulk_config_generated",
+            action="route_bulk_config_generated",
             entity_type="route",
-            details={"filename": filename, "route_ids": [route.id for route in routes]},
+            details={"filename": filename, "route_ids": route_ids, "route_names": [r.route_name for r in ordered_routes]},
+            user_id=current_user.id,
         )
         db.session.commit()
 
         return send_file(buffer, as_attachment=True, download_name=filename, mimetype="text/plain")
-
+    
     except Exception as e:
-        print(f"Error generating bulk config: {e}")
-        flash(f"Ошибка при генерации файла: {e}", "danger")
+        flash(f"Ошибка: {e}", "danger")
         return redirect(url_for("route_management.route_list"))
 
 
-# Импорт маршрута
+# Промежуточный путь для сортировки выбранных маршрутов (порядок в TRFZ)
+@bp.route("/routes/sort_bulk_routes", methods=["POST"])
+@login_required
+def sort_bulk_routes():
+    route_ids = request.form.getlist("route_ids")
+    print(f"DEBUG: Получены ID: {route_ids}")
+    
+    # Пытаемся получить 'next' из параметров URL
+    next_page = request.args.get('next')
+    print(f"DEBUG: Параметр next_page: {next_page}")
+
+    if not route_ids or len(route_ids) > 10:
+        flash("Выберите от 1 до 10 маршрутов.", "warning")
+        return redirect(next_page or url_for("route_management.route_list"))
+    
+    # Создаем экземпляр формы из пришедших данных
+    bulk_form = BulkGenerateForm(request.form)
+
+    # Собираем данные шапки, чтобы передать их дальше
+    header_data = {
+        'region_code': request.form.get('region_code'),
+        'carrier_id': request.form.get('carrier_id'),
+        'unit_id': request.form.get('unit_id'),
+        'decimal_places': request.form.get('decimal_places')
+    }
+
+    # Загружаем объекты маршрутов для отображения имен на странице сортировки
+    # Базовый запрос: выбираем маршруты по списку ID
+    query = sa.select(Route).where(Route.id.in_(route_ids))
+    # Если пользователь НЕ админ, добавляем ограничение по владельцу
+    # Если админ — условие ниже просто не применится, и он получит все ID
+    if not current_user.is_admin:
+        query = query.where(Route.user_id == current_user.id)
+
+    routes = db.session.scalars(query).all()
+    
+    # Сортируем их в том порядке, в котором они пришли изначально (для дефолта)
+    routes_dict = {str(r.id): r for r in routes}
+    sorted_routes = [routes_dict[rid] for rid in route_ids if rid in routes_dict]
+
+    return render_template("sort_bulk_routes.html", 
+                           routes=sorted_routes, 
+                           header_data=header_data,
+                           bulk_form=bulk_form,
+                           next_page=next_page,)
+
+
+# Импорт маршрута (Полная версия: TRFZ + Excel)
 @bp.route("/route/import", methods=["GET", "POST"])
 @login_required
 def import_route():
     form = ImportRouteForm()
     if form.validate_on_submit():
         file = form.route_file.data
+        filename = file.filename.lower()
+        raw_data = file.read()
+        
         try:
-            raw_data = file.read()
+            # Диспетчер импорта
+            if filename.endswith(('.xlsx', '.xls')):
+                importer = ExcelRouteImporter(raw_data)
+                # Excel возвращает 1 маршрут (словарь)
+                routes_to_process = [importer.get_formatted_route_data()]
+            else:
+                importer = TRFZRouteImporter(raw_data)
+                # TRFZ возвращает список маршрутов
+                routes_to_process = importer.get_formatted_route_data()
 
-            # --- ОПРЕДЕЛЕНИЕ КОДИРОВКИ ---
-            # Пробуем декодировать как UTF-8, если не выйдет — берем CP866
-            try:
-                content = raw_data.decode("utf-8")
-            except UnicodeDecodeError:
-                content = raw_data.decode("cp866", errors="replace")
-
-            lines = [line.strip() for line in content.splitlines() if line.strip()]
-
-            if len(lines) < 2:
-                flash("Файл пуст или имеет неверный формат", "danger")
-                return redirect(request.url)
-
-            # --- 1. ПАРСИНГ ШАПКИ ---
-            header = lines[0].split(";")
-            dec_places = int(header[4])
-            multiplier = 10**dec_places
-
-            # --- 2. ПАРСИНГ R-СТРОКИ ---
-            r_line = lines[1].split(";")
-            r_number = r_line[1]
-            # Убираем возможные артефакты кодировки из названия
-            r_name = r_line[4].strip()
-            zones_count = int(r_line[3])
-            tabs_count = int(r_line[5])
-
-            # --- 3. ИНИЦИАЛИЗАЦИЯ МАРШРУТА ---
-            new_route = Route(
-                user_id=current_user.id,
-                route_name=r_name,
-                route_number=r_number,
-                region_code=header[0],
-                carrier_id=header[1],
-                unit_id=header[2],
-                transport_type=f"0x{r_line[2]}" if not r_line[2].startswith("0x") else r_line[2],
-                decimal_places=dec_places,
-                stops=[],
-                tariff_tables=[],
-                price_matrix=[],
-                stops_set=True,
-                is_completed=True,
-            )
-
-            # --- 4. ОСТАНОВКИ ---
-            stop_lines = lines[2 : 2 + zones_count]
-            for sl in stop_lines:
-                parts = sl.split(";")
-                new_route.stops.append({"name": parts[2], "km": parts[1]})
-
-            # --- 5. ТАРИФНЫЕ ТАБЛИЦЫ ---
-            tabs_start = 2 + zones_count
-            tab_lines = lines[tabs_start : tabs_start + tabs_count]
-            tab_ids = []
-
-            new_route.tariff_tables = []
-
-            for index, tl in enumerate(tab_lines, start=1):
-                parts = tl.split(";")
-                tab_no = int(parts[0])
-                raw_ss_string = parts[2]
-
-                # Парсим список кодов для поля parsed_ss_codes_list
-                ss_list = [c.strip() for c in raw_ss_string.split(";") if c.strip()]
-
-                # Формируем словарь строго по структуре "Шага 1"
-                new_route.tariff_tables.append(
-                    {
-                        "tab_number": tab_no,
-                        "tariff_name": f"Тариф {index}",
-                        "table_type_code": parts[1],
-                        "ss_series_codes": raw_ss_string,
-                        "parsed_ss_codes_list": ss_list,
+            imported_count = 0
+            for data in routes_to_process:
+                try:
+                    # Валидация через Pydantic (общая для всех)
+                    check_payload = {
+                        **data["common"], # region_code, carrier_id и т.д.
+                        **data["route_info"],
+                        "tariff_tables": data["tariff_tables"]
                     }
-                )
-                tab_ids.append(str(tab_no))
+                    valid = RouteInfoModel(**check_payload)
 
-            # --- 6. МАТРИЦА ЦЕН ---
-            matrix = [[{} for _ in range(zones_count)] for _ in range(zones_count)]
-            price_lines = lines[tabs_start + tabs_count :]
-
-            for ml in price_lines:
-                parts = ml.split(";")
-                if len(parts) < 3:
+                    new_route = Route(
+                        user_id=current_user.id,
+                        route_name=valid.route_name,
+                        route_number=valid.route_number,
+                        region_code=valid.region_code,
+                        carrier_id=valid.carrier_id,
+                        unit_id=valid.unit_id,
+                        transport_type=valid.transport_type,
+                        decimal_places=int(valid.decimal_places),
+                        stops=data["stops"],
+                        tariff_tables=data["tariff_tables"],
+                        price_matrix=data["price_matrix"],
+                        start_date=valid.start_date,
+                        updated_at=valid.updated_at,
+                        stops_set=True,
+                        is_completed=True,  # Ставим False, чтобы пользователь проверил цены после импорта 
+                                            # (True, потому что цены должны быть корректны сразу без проверки)
+                    )
+                    db.session.add(new_route)
+                    db.session.flush()
+                    
+                    log_action(action="route_imported", entity_type="route", 
+                               route_id=new_route.id, details={"name": valid.route_name})
+                    imported_count += 1
+                except Exception as e:
+                    flash(f"Ошибка в одном из маршрутов: {str(e)}", "warning")
                     continue
+            
+            # Пытаемся получить 'next' из параметров URL
+            next_page = request.args.get('next')
 
-                i, j = int(parts[0]), int(parts[1])
-                prices = parts[2:]
-
-                cell_data = {}
-                for idx, p_val in enumerate(prices):
-                    if idx < len(tab_ids):
-                        t_id = tab_ids[idx]
-                        cell_data[t_id] = float(p_val) / multiplier
-
-                matrix[i][j] = cell_data
-                matrix[j][i] = cell_data
-
-            new_route.price_matrix = matrix
-
-            db.session.add(new_route)
-            db.session.flush()
-            log_action(
-                action="route_imported",
-                entity_type="route",
-                route_id=new_route.id,
-                details={"after": serialize_route(new_route)},
-            )
             db.session.commit()
-            flash(f'Маршрут "{r_name}" успешно импортирован!', "success")
-            return redirect(url_for("route_management.route_list"))
+            flash(f"Успешно импортировано: {imported_count}", "success")
+            return redirect(next_page or url_for("route_management.route_list"))
 
         except Exception as e:
             db.session.rollback()
-            flash(f"Ошибка импорта: {str(e)}", "danger")
-            return redirect(request.url)
-
+            flash(f"Критическая ошибка файла: {str(e)}", "danger")
+            
     return render_template("import_route.html", form=form)
+
+
+# --- Копирование маршрута ---
+@bp.route("/route/copy/<int:route_id>", methods=["POST"])
+@login_required
+def copy_route(route_id):
+    original_route = db.session.get(Route, route_id)
+
+    if not original_route:
+        flash("Маршрут не найден", "danger")
+        return redirect(request.referrer or url_for("route_management.route_list"))
+    
+    # Обычный пользователь может копировать только свои маршруты
+    if not current_user.is_admin and original_route.user_id != current_user.id:
+        flash("Нет прав для копирования этого маршрута", "danger")
+        return redirect(request.referrer or url_for("route_management.route_list"))
+    
+    # Определяем владельца копии
+    if current_user.is_admin:
+        new_owner_id = request.form.get("new_owner_id", type=int)
+    else:
+        new_owner_id = current_user.id
+
+    # Формируем название для копии
+    # 1. Очищаем базовое имя от старых пометок "(Копия ...)"
+    base_name = re.sub(r' \(Копия\s*\d*\)$', '', original_route.route_name)
+
+    # 2. Логика подбора уникального имени
+    candidate_name = f"{base_name} (Копия)"
+    
+    # Проверяем, существует ли уже базовое "(Копия)"
+    exists = db.session.scalar(sa.select(Route.id).where(Route.route_name == candidate_name))
+    
+    if exists:
+        counter = 1
+        # Ищем свободное число, пока не найдем уникальное имя
+        while True:
+            # Формируем суффикс
+            suffix = f" (Копия {counter})"
+            # Учитываем лимит 120 символов перед проверкой
+            max_base_len = 120 - len(suffix)
+            candidate_name = base_name[:max_base_len] + suffix
+            
+            # Проверяем базу на наличие именно этого имени
+            match = db.session.scalar(sa.select(Route.id).where(Route.route_name == candidate_name))
+            if not match:
+                break  # Имя свободно!
+            counter += 1
+    else:
+        # Если базового "(Копия)" нет, проверяем лимит для него
+        max_base_len = 120 - len(" (Копия)")
+        candidate_name = base_name[:max_base_len] + " (Копия)"
+    
+    # Создаем полную копию данных
+    new_route = Route(
+        route_name=candidate_name,
+        transport_type=original_route.transport_type,
+        carrier_id=original_route.carrier_id,
+        unit_id=original_route.unit_id,
+        route_number=original_route.route_number,
+        region_code=original_route.region_code,
+        decimal_places=original_route.decimal_places,
+        start_date=original_route.start_date,
+        # Копируем сложные структуры данных
+        stops=deepcopy(original_route.stops),
+        price_matrix=deepcopy(original_route.price_matrix),
+        tariff_tables=deepcopy(original_route.tariff_tables),
+        # Системные поля
+        user_id=new_owner_id or original_route.user_id,
+        is_completed=original_route.is_completed,
+        stops_set=original_route.stops_set,
+        updated_at=datetime.now().isoformat()
+    )
+    
+    db.session.add(new_route)
+    db.session.commit()
+
+    # Пытаемся получить 'next' из параметров URL
+    # next_page = request.args.get('next')
+    
+    flash(f"Маршрут {candidate_name} успешно скопирован для пользователя {new_route.user}", "success")
+    return redirect(request.referrer or url_for("route_management.route_list"))

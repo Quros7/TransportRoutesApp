@@ -5,9 +5,9 @@
     <p>Маршрут: <strong>{{ route.route_name }}</strong></p>
     
     <div class="alert alert-info">
-        Заполните цены для проезда из начальной остановки (строка) до конечной остановки (столбец) для каждого тарифа.
+        Введите стоимость проезда из начальной остановки (строка) до конечной остановки (столбец) для каждого тарифа.
         <br>
-        <strong>Внимание:</strong> По умолчанию все цены равны 0 (что означает невозможность проезда между указанными зонами).
+        <strong>Внимание:</strong> По умолчанию все цены равны 0 (пустые ячейки заполнятся нулями при сохранении таблицы).
     </div>
 
     <form method="POST" id="price-matrix-form">
@@ -18,17 +18,17 @@
         {# Скрытое поле, куда JavaScript поместит всю матрицу в виде JSON #}
         {# {{ form.price_matrix_data(id='price-matrix-data') }} #}
 
-        <div class="table-responsive">
+        <div class="table-responsive sticky-matrix-container">
             <table class="table table-bordered table-sm price-matrix">
                 <thead>
                     <tr>
-                        <th class="align-top text-center" style="min-width: 120px;">От / До</th>
+                        <th class="align-top text-center">От / До</th>
                         {% set is_city_route = route.transport_type == '0x02' %}
                         {% for stop in route.stops %}
                             {# Разрешаем отображение заголовка для Остановки 0 (индекс 0), если это городской маршрут. #}
-                            {% if loop.index > 0 or is_city_route %} 
-                                <th class="text-center">{{ stop.name }} ({{ loop.index0 }})</th>
-                            {% endif %}
+                            {# {% if loop.index > 0 or is_city_route %} #}
+                            <th class="text-center align-top">({{ loop.index0 }}) <br> {{ stop.name }}</th>
+                            {# {% endif %} #}
                         {% endfor %}
                     </tr>
                 </thead>
@@ -39,58 +39,62 @@
                         {% set i = loop.index0 %}
                         
                         {# Разрешаем отображение строки, если маршрут городской (0x02), даже если это последняя (и единственная) остановка. #}
-                        {% set is_city_route = route.transport_type == '0x02' %}
-                        {% if not loop.last or (is_city_route and loop.last) %}
-                            <tr>
-                                <th scope="row" class="table-light">От: {{ start_stop.name }} ({{ loop.index0 }})</th>
+                        {# {% set is_city_route = route.transport_type == '0x02' %} #}
+                        {# {% if not loop.last or (is_city_route and loop.last) %} #}
+                        <tr>
+                            <th scope="row" class="table-light">От: ({{ i }}) <br> {{ start_stop.name }}</th>
+                            
+                            {# j - Индекс конечной остановки (столбец) #}
+                            {% for end_stop in route.stops %}
+                                {# {% set i = loop.parent.index0 %} #}
+                                {% set j = loop.index0 %}
                                 
-                                {# j - Индекс конечной остановки (столбец) #}
-                                {% for end_stop in route.stops %}
-                                    {# {% set i = loop.parent.index0 %} #}
-                                    {% set j = loop.index0 %}
-                                    
-                                    {# Проверка условий отображения ячейки #}
-                                    {% set allow_input = (j > i) or (is_city_route and i == j) %}
+                                {# Проверка условий отображения ячейки #}
+                                {# {% set allow_input = (j > i) or (is_city_route and i == j) %} #}
+                                {# {% set allow_input = (j >= i) %} #}
 
-                                    {% if allow_input %}
-                                        {# Ячейка для заполнения #}
-                                        <td data-start-index="{{ i }}" data-end-index="{{ j }}">
-                                            {% for tariff_table in route.tariff_tables %}
-                                                {% set tariff_id = tariff_table.tab_number %} {# Используем TabN как ID (1, 2, 3...) #}
-                                                
-                                                <div class="tariff-input-group mb-1">
-                                                    <label class="small text-muted mb-0">
-                                                        {{ tariff_table.tariff_name }}:
-                                                    </label>
-                                                    <input 
-                                                        type="number" 
-                                                        step="0.01" 
-                                                        min="0"
-                                                        class="form-control form-control-sm price-input"
-                                                        data-tariff-id="{{ tariff_id }}"
-                                                        
-                                                        {# Загрузка существующих данных #}
-                                                        {# Проверяем, существует ли цена в матрице (matrix[i][j]) #}
-                                                        {% set prices = route.price_matrix[i][j] if route.price_matrix and route.price_matrix[i] is defined and route.price_matrix[i][j] is defined else {} %}
-                                                        value="{{ prices[tariff_id|string] if tariff_id|string in prices else '' }}"
-                                                        
-                                                        placeholder="Цена"
-                                                    >
-                                                </div>
-                                            {% endfor %}
-                                        </td>
-                                    {% else %}
-                                        {# Ячейка не требуется (j <= i) #}
-                                        <td class="bg-light" data-start-index="{{ i }}" data-end-index="{{ j }}">
-                                            {# 💥 Для диагонали (i==j) не-городских маршрутов можно добавить пометку #}
-                                            {% if i == j and not is_city_route %}
-                                                <span class="text-muted small">Внутризоновая</span>
-                                            {% endif %}
-                                        </td>
-                                    {% endif %}
-                                {% endfor %}
-                            </tr>
-                        {% endif %}
+                                {% if j >= i %}
+                                    {# Ячейка для заполнения #}
+                                    <td data-start-index="{{ i }}" data-end-index="{{ j }}">
+                                        {% for tariff_table in route.tariff_tables %}
+                                            {% set tariff_id = tariff_table.uid %} {# Используем UID как уникальный ключ #}
+                                            
+                                            <div class="tariff-input-group mb-1">
+                                                <label class="small text-muted mb-0">
+                                                    {{ tariff_table.tariff_name }}:
+                                                </label>
+
+                                                {# 1. Безопасно достаем строку матрицы #}
+                                                {% set row = route.price_matrix[i] if route.price_matrix and route.price_matrix is iterable and route.price_matrix[i] is defined else none %}
+                                                {# 2. Безопасно достаем ячейку (цены тарифов) #}
+                                                {% set prices = row[j] if row and row[j] is defined and row[j] is mapping else {} %}
+                                                <input 
+                                                    type="text" 
+                                                    step="0.01" 
+                                                    min="0"
+                                                    class="form-control form-control-sm price-input"
+                                                    data-tariff-id="{{ tariff_id }}"
+                                                    
+                                                    {# Значение подтягивается по UID тарифа #}
+                                                    value="{{ prices[tariff_id] if tariff_id in prices else ''}}"
+                                                    
+                                                    placeholder="Цена"
+                                                >
+                                            </div>
+                                        {% endfor %}
+                                    </td>
+                                {% else %}
+                                    {# Ячейка не требуется (j <= i) #}
+                                    <td class="bg-light" data-start-index="{{ i }}" data-end-index="{{ j }}">
+                                        {# Для диагонали (i==j) не-городских маршрутов можно добавить пометку #}
+                                        {# {% if i == j and not is_city_route %} #}
+                                        {#     <span class="text-muted small">Внутризоновая</span> #}
+                                        {# {% endif %} #}
+                                    </td>
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                        {# {% endif %} #}
                     {% endfor %}
                 </tbody>
             </table>
@@ -98,7 +102,7 @@
 
         {# Кнопки Назад и Сохранить #}
         <div class="mt-4 d-flex justify-content-between">
-            <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id) }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('route_management.edit_route_stops', route_id=route.id, next=next) }}" class="btn btn-outline-secondary">
                 <i class="bi bi-chevron-left"></i> Назад (Остановки)
             </a>
             
@@ -115,6 +119,29 @@
     document.addEventListener('DOMContentLoaded', function() {
         const inputs = document.querySelectorAll('.price-input');
         const mainTable = document.querySelector('.price-matrix'); 
+
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('price-input')) {
+                let input = e.target;
+                
+                // 1. Запоминаем текущую позицию курсора
+                let selectionStart = input.selectionStart;
+                
+                // 2. Заменяем точку на запятую
+                let oldValue = input.value;
+                let newValue = oldValue.replace('.', ',');
+                
+                // 3. Оставляем только цифры и одну запятую (регулярка)
+                newValue = newValue.replace(/[^0-9,]/g, ''); // Удаляем всё кроме цифр и запятой
+                
+                // Если значение изменилось, обновляем его и возвращаем курсор
+                if (oldValue !== newValue) {
+                    input.value = newValue;
+                    // Возвращаем курсор на место (корректно работает для type="text")
+                    input.setSelectionRange(selectionStart, selectionStart);
+                }
+            }
+        });
 
         inputs.forEach(input => {
             input.addEventListener('focus', function() {
@@ -165,34 +192,63 @@
         });
     });
 
-    /**
-     * Ваша существующая функция сбора данных (без изменений)
-     */
+    // Функция сбора данных (без изменений)
     function collectMatrixData(event) {
         if (event) event.preventDefault();
+        
         const stopsCount = {{ route.stops | length }};
+        
+        // Собираем все уникальные ID тарифов, которые есть на странице
+        const allTariffIds = Array.from(new Set(
+            Array.from(document.querySelectorAll('.price-input'))
+                .map(input => input.getAttribute('data-tariff-id'))
+        ));
+
+        // Инициализируем матрицу нулями (симметрично импортеру)
         let matrix = [];
         for (let i = 0; i < stopsCount; i++) {
-            matrix[i] = new Array(stopsCount).fill(null);
+            matrix[i] = [];
+            for (let j = 0; j < stopsCount; j++) {
+                let defaultPrices = {};
+                allTariffIds.forEach(id => { defaultPrices[id] = 0.0; });
+                matrix[i][j] = defaultPrices;
+            }
         }
+
+        // 3. Находим все ячейки в DOM
         const cells = document.querySelectorAll('.price-matrix td[data-start-index]');
+        
         cells.forEach(cell => {
             const i = parseInt(cell.getAttribute('data-start-index'));
             const j = parseInt(cell.getAttribute('data-end-index'));
-            let priceData = {};
+            
             const inputs = cell.querySelectorAll('.price-input');
             inputs.forEach(input => {
                 const tariffId = input.getAttribute('data-tariff-id');
-                let value = input.value.trim();
-                let numericValue = null;
-                if (value !== '' && !isNaN(parseFloat(value))) {
-                    numericValue = parseFloat(parseFloat(value).toFixed(2));
+                let rawValue = input.value.trim().replace(',', '.');
+                
+                let numericValue = 0;
+                if (rawValue !== '') {
+                    let parsed = parseFloat(rawValue);
+                    if (!isNaN(parsed)) {
+                        // Округляем до 2 знаков
+                        numericValue = Math.round(parsed * 100) / 100;
+                    }
                 }
-                priceData[tariffId] = numericValue || 0;
-            });
-            matrix[i][j] = priceData;
+                
+                // Записываем значение в уже существующий объект ячейки
+                matrix[i][j][tariffId] = numericValue;
+                
+                // Обновляем визуально для пользователя
+                input.value = numericValue.toFixed(2).replace('.', ',');
+                });
         });
-        document.getElementById('price-matrix-data').value = JSON.stringify(matrix);
+
+        // Помещаем JSON в скрытое поле
+        const jsonData = JSON.stringify(matrix);
+        document.getElementById('price-matrix-data').value = jsonData;
+        
+        console.log("Отправка данных:", jsonData); // Для отладки в консоли
         document.getElementById('price-matrix-form').submit();
         return false;
     }
