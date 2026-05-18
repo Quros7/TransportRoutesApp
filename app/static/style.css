@@ -230,12 +230,28 @@ body {
     margin-bottom: 1px;
 }
 
-#routesTable-admin > tbody > tr > td, #routesTable > tbody > tr > td {
-    padding: 4px 2px;
+#routesTable-admin > thead > tr > th, #routesTable > thead > tr > th {
+    padding-right: 20px;
+    text-align: center;
+    padding-left: 4px;
+    font-size: 0.91rem;
 }
 
-#routesTable-admin > thead > tr > th, #routesTable > thead > tr > th {
-    padding-right: 22px;
+#routesTable-admin > thead > tr > th:first-child, #routesTable > thead > tr > th:first-child {
+    padding-right: 0px;
+}
+
+#routesTable-admin > thead > tr > th:nth-child(2), #routesTable > thead > tr > th:nth-child(2) {
+    padding-right: 20px;
+}
+
+#routesTable-admin > tbody > tr > td, #routesTable > tbody > tr > td {
+    padding: 4px 4px;
+    text-align: center;
+}
+
+#routesTable-admin > tbody > tr > th, #routesTable > tbody > tr > th {
+    text-align: center;
 }
 
 /* Стили для группированных строк по пользователям */

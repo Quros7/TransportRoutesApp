@@ -83,9 +83,10 @@
                                 </div>
                             </th>
                             <th scope="col">№</th>
+                            <th scope="col">Перевозчик</th>
+                            <th scope="col">Код региона</th>
                             <th scope="col">Название маршрута</th>
                             <th scope="col">Номер маршрута</th>
-                            <th scope="col">Перевозчик (ID)</th>
                             <th scope="col">Тип транспорта</th>
 
                             <th scope="col">Начало действия</th>
@@ -105,12 +106,13 @@
                                     <input type="checkbox" value="{{ route.id }}" class="form-check-input route-checkbox">
                                 </td>
                                 <th scope="row">{{ loop.index }}</th>
-                                <td>
+                                <td>{{ route.carrier_id }}</td>
+                                <td>{{ route.region_code }}</td>
+                                <td style="text-align: left;">
                                     {# <strong>{{ route.route_name }}</strong> #}
                                     {{ route.route_name }}
                                 </td>
                                 <td>{{ route.route_number }}</td>
-                                <td>{{ route.carrier_id }}</td>
                                 <td>
                                     <span class="small">
                                         {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
@@ -118,7 +120,7 @@
                                 </td>
 
                                 {# Дата начала действия (форматирование из YYMMDD в DD.MM.YY) #}
-                                <td>
+                                <td style="text-align: center;">
                                     {% if route.start_date and route.start_date|length == 6 %}
                                         <span class="small">
                                             {{ "20" + route.start_date[0:2] }}-{{ route.start_date[2:4] }}-{{ route.start_date[4:6] }}
@@ -129,7 +131,7 @@
                                 </td>
 
                                 {# Дата последнего изменения #}
-                                <td>
+                                <td style="text-align: center;">
                                     {% if route.updated_at %}
                                         <span class="small">
                                             {{ " ".join(route.updated_at.split('.')[0].split('T')) }}
