@@ -33,11 +33,11 @@ class ExcelRouteImporter:
                 "carrier_id": str(self.sheet.cell(row=2, column=2).value).zfill(4),
                 "unit_id": str(self.sheet.cell(row=3, column=2).value).zfill(4),
                 "start_date": start_date_str,
-                "route_name": self.sheet.cell(row=5, column=2).value,
-                "route_number": self.sheet.cell(row=6, column=2).value,
-                "transport_type": f"0x{self.sheet.cell(row=7, column=2).value}" 
-                                if self.sheet.cell(row=7, column=2).value else "0x01",
-                "region_code": str(66),
+                "region_code": str(self.sheet.cell(row=5, column=2).value),
+                "route_name": self.sheet.cell(row=6, column=2).value,
+                "route_number": self.sheet.cell(row=7, column=2).value,
+                "transport_type": f"0x{self.sheet.cell(row=8, column=2).value}" 
+                                if self.sheet.cell(row=8, column=2).value else "0x01",
                 "updated_at": datetime.now().isoformat() # Генерируем время импорта
             }
             return data
