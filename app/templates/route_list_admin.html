@@ -129,7 +129,9 @@
                                 <td data-filter="{{ route.carrier_id }}">{{ route.carrier_id }}</td>
                                 <td data-filter="{{ route.region_code }}">{{ route.region_code }}</td>
                                 <td style="text-align: left;" data-filter="{{ route.route_name }}">
-                                    {{ route.route_name }}
+                                    <span class="small">
+                                        {{ route.route_name }}
+                                    </span>
                                 </td>
                                 <td data-filter="{{ route.route_number }}">{{ route.route_number }}</td>
                                 <td data-filter="{{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}">

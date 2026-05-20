@@ -239,6 +239,7 @@ body {
 
 #routesTable-admin > thead > tr > th:first-child, #routesTable > thead > tr > th:first-child {
     padding-right: 0px;
+    padding-left: 2px;
 }
 
 #routesTable-admin > thead > tr > th:nth-child(2), #routesTable > thead > tr > th:nth-child(2) {
@@ -247,11 +248,11 @@ body {
 
 #routesTable-admin > tbody > tr > td, #routesTable > tbody > tr > td {
     padding: 2px 2px;
-    text-align: center;
+    text-align: left;
 }
 
 #routesTable-admin > tbody > tr > th, #routesTable > tbody > tr > th {
-    text-align: center;
+    text-align: left;
 }
 
 thead > tr > th > .form-select {
