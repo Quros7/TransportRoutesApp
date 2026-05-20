@@ -232,9 +232,9 @@ body {
 
 #routesTable-admin > thead > tr > th, #routesTable > thead > tr > th {
     padding-right: 20px;
-    text-align: center;
-    padding-left: 4px;
-    font-size: 0.91rem;
+    text-align: -webkit-center;
+    padding-left: 0px;
+    font-size: 0.9rem;
 }
 
 #routesTable-admin > thead > tr > th:first-child, #routesTable > thead > tr > th:first-child {
@@ -246,12 +246,16 @@ body {
 }
 
 #routesTable-admin > tbody > tr > td, #routesTable > tbody > tr > td {
-    padding: 4px 4px;
+    padding: 2px 2px;
     text-align: center;
 }
 
 #routesTable-admin > tbody > tr > th, #routesTable > tbody > tr > th {
     text-align: center;
+}
+
+thead > tr > th > .form-select {
+    padding: .375rem 1.85rem .375rem .2rem;
 }
 
 /* Стили для группированных строк по пользователям */
@@ -274,4 +278,20 @@ tr.group td::before {
 
 tr.group.collapsed td::before {
     content: '▶';
+}
+
+/* Подсветка столбцов с активными фильтрами */
+
+/* Подсветка самой ячейки th, в которой активен фильтр */
+th.has-filter-active {
+    background-color: #7cc9fc;
+    transition: background-color 0.2s ease;
+}
+
+/* Подсветка рамки и текста активного селекта */
+select.filter-active {
+    border-color: #1a66e0;
+    background-color: #fff;
+    /* color: #1a73e8; */
+    font-weight: bold;
 }

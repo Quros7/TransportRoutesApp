@@ -98,6 +98,22 @@
                             <th scope="col">Статус</th> 
                             <th scope="col" class="text-center no-sort" style="min-width: 120px;">Действия</th>
                         </tr>
+                        <tr class="filter-row">
+                            <th class="no-filter"></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th class="no-filter"></th>
+                        </tr>
                     </thead>
                     <tbody>
                         {% for route in routes %}
@@ -110,20 +126,20 @@
                                 <td style="overflow-wrap: anywhere;">
                                     {{ route.user.username}}
                                 </td>
-                                <td>{{ route.carrier_id }}</td>
-                                <td>{{ route.region_code }}</td>
-                                <td style="text-align: left;">
+                                <td data-filter="{{ route.carrier_id }}">{{ route.carrier_id }}</td>
+                                <td data-filter="{{ route.region_code }}">{{ route.region_code }}</td>
+                                <td style="text-align: left;" data-filter="{{ route.route_name }}">
                                     {{ route.route_name }}
                                 </td>
-                                <td>{{ route.route_number }}</td>
-                                <td>
+                                <td data-filter="{{ route.route_number }}">{{ route.route_number }}</td>
+                                <td data-filter="{{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}">
                                     <span class="small">
                                         {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
                                     </span>
                                 </td>
 
                                 {# Дата начала действия (форматирование из YYMMDD в DD.MM.YY) #}
-                                <td style="text-align: center;">
+                                <td style="text-align: center;" data-filter="{% if route.start_date and route.start_date|length == 6 %}20{{ route.start_date[0:2] }}-{{ route.start_date[2:4] }}-{{ route.start_date[4:6] }}{% else %}-{% endif %}">
                                     {% if route.start_date and route.start_date|length == 6 %}
                                         <span class="small">
                                             {{ "20" + route.start_date[0:2] }}-{{ route.start_date[2:4] }}-{{ route.start_date[4:6] }}
@@ -134,7 +150,7 @@
                                 </td>
 
                                 {# Дата последнего изменения #}
-                                <td style="text-align: center;">
+                                <td style="text-align: center;" data-filter="{% if route.updated_at %}{{ ' '.join(route.updated_at.split('.')[0].split('T')) }}{% else %}-{% endif %}">
                                     {% if route.updated_at %}
                                         <span class="small">
                                             {{ " ".join(route.updated_at.split('.')[0].split('T')) }}
@@ -144,10 +160,10 @@
                                     {% endif %}
                                 </td>
 
-                                <td class="text-center">
+                                <td class="text-center" data-filter="{{ route.tariff_tables | length if route.tariff_tables else 0 }}">
                                     {{ route.tariff_tables | length if route.tariff_tables else 0 }}
                                 </td>
-                                <td class="text-center">
+                                <td class="text-center" data-filter="{{ route.stops | length if route.stops else 0 }}">
                                     {{ route.stops | length if route.stops else 0 }}
                                 </td>
                                 <td>
@@ -312,27 +328,115 @@
 
         var table = $('#routesTable-admin').DataTable({
             "order": [[1, 'asc']],
+            "orderCellsTop": true, // ОТКЛЮЧАЕТ сортировку при клике на выпадающие списки в шапке
             "columnDefs": [
                 // { "visible": false, "targets": 1 }
-                { "orderable": false, "targets": [0, 12] } // Чекбоксы не сортируем
+                { "orderable": false, "targets": [0, 13] } // Чекбоксы не сортируем
             ],
             "pageLength": 50, // Для админа лучше видеть больше строк сразу
             "language": {
-            "lengthMenu": "Показать _MENU_ записей на странице",
-            "zeroRecords": "Ничего не найдено",
-            "info": "Показана страница _PAGE_ из _PAGES_",
-            "infoEmpty": "Нет доступных записей",
-            "infoFiltered": "(отфильтровано из _MAX_ записей)",
+            "lengthMenu": "Показать _MENU_ маршрутов на странице",
+            "zeroRecords": "Маршруты отсутствуют",
+            "info": "Записи с _START_ до _END_ из _TOTAL_ маршрутов",
+            "infoEmpty": "Нет доступных маршрутов",
+            "infoFiltered": "(отфильтровано из _MAX_ маршрутов)",
             "search": "Поиск:",
             "paginate": {
                 "first": "Первая",
                 "last": "Последняя",
-                "next": "Вперед",
-                "previous": "Назад"
+                "next": "Следующая",
+                "previous": "Предыдущая"
             },
-            "loadingRecords": "Загрузка...",
-            "processing": "В процессе..."
+            "loadingRecords": "Загрузка маршрутов...",
+            "processing": "Подождите..."
         },
+
+        // ГЕНЕРАЦИЯ ВЫПАДАЮЩИХ СПИСКОВ ДЛЯ СТОЛБЦОВ
+            initComplete: function () {
+                var api = this.api();
+                var filterRow = $('#routesTable-admin thead tr').eq(1); // Находим второй ряд в thead
+                
+                if (!filterRow.length) return;
+
+                api.columns().every(function () {
+                    var column = this;
+                    var headerCell = filterRow.find('th, td').eq(column.index());
+
+                    if (!headerCell.length) return;
+
+                    // Пропускаем ячейки с классом no-filter
+                    if (headerCell.hasClass('no-filter')) {
+                        return;
+                    }
+
+                    // Создаем селект со стандартным title
+                    var select = $('<select class="form-select form-select-sm py-0" style="font-size: 0.8rem; max-width: 76px; width: min-content;" title="Фильтр по столбцу"><option value="">Все</option></select>')
+                        .appendTo(headerCell.empty())
+                        .on('change', function () {
+                            var rawVal = $(this).val();
+                            var val = $.fn.dataTable.util.escapeRegex(rawVal);
+                            
+                            // ПОДСВЕТКА И ТУЛТИП АКТИВНОГО ФИЛЬТРА
+                            if (rawVal !== "") {
+                                $(this).addClass('filter-active');
+                                headerCell.addClass('has-filter-active');
+                                $(this).attr('title', 'Выбрано: ' + rawVal);
+                            } else {
+                                $(this).removeClass('filter-active');
+                                headerCell.removeClass('has-filter-active');
+                                $(this).attr('title', 'Фильтр по столбцу');
+                            }
+
+                            // ВНИМАНИЕ: На админской странице колонка "Статус" теперь имеет ИНДЕКС 12!
+                            // Для неё используем частичное совпадение, для всех остальных — строгое (^$)
+                            if (column.index() === 12) { 
+                                column.search(val ? val : '', false, false).draw();
+                            } else {
+                                column.search(val ? '^' + val + '$' : '', true, false).draw();
+                            }
+
+                            if (typeof updateCount === "function") {
+                                updateCount(); 
+                            }
+                        });
+
+                    // 1. Собираем только уникальные значения для текущего столбца с учетом data-filter
+                    var rawValues = [];
+                    column.cells('', column.index()).render('filter').unique().each(function (val) {
+                        if (val) {
+                            val = val.trim();
+                            if (val !== "" && rawValues.indexOf(val) === -1) {
+                                rawValues.push(val);
+                            }
+                        }
+                    });
+
+                    // 2. Сортируем массив (Естественная сортировка)
+                    rawValues.sort(function (a, b) {
+                        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+                    });
+
+                    // 3. Заполняем селект отсортированными значениями
+                    rawValues.forEach(function (cleanText) {
+                        var exists = false;
+                        select.find('option').each(function() {
+                            if ($(this).val() === cleanText) {
+                                exists = true;
+                                return false; 
+                            }
+                        });
+
+                        if (!exists) {
+                            select.append($('<option></option>').val(cleanText).text(cleanText));
+                        }
+                    });
+                    
+                    if (select.find('option').length <= 1) {
+                        headerCell.empty();
+                    }
+                });
+            },
+
             "drawCallback": function(settings) {
                 var api = this.api();
                 var rows = api.rows({ page: 'current' }).nodes();

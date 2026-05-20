@@ -97,6 +97,21 @@
                             <th scope="col">Статус</th> 
                             <th scope="col" class="text-center no-sort" style="min-width: 120px;">Действия</th>
                         </tr>
+                        <tr class="filter-row">
+                            <th class="no-filter"></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th class="no-filter"></th>
+                        </tr>
                     </thead>
                     <tbody>
                         {% for route in routes %}
@@ -108,19 +123,18 @@
                                 <th scope="row">{{ loop.index }}</th>
                                 <td>{{ route.carrier_id }}</td>
                                 <td>{{ route.region_code }}</td>
-                                <td style="text-align: left;">
-                                    {# <strong>{{ route.route_name }}</strong> #}
+                                <td style="text-align: left;" data-filter="{{ route.route_name }}">
                                     {{ route.route_name }}
                                 </td>
                                 <td>{{ route.route_number }}</td>
-                                <td>
+                                <td data-filter="{{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}">
                                     <span class="small">
                                         {{ TRANSPORT_TYPES.get(route.transport_type, route.transport_type) }}
                                     </span>
                                 </td>
 
                                 {# Дата начала действия (форматирование из YYMMDD в DD.MM.YY) #}
-                                <td style="text-align: center;">
+                                <td style="text-align: center;" data-filter="{% if route.start_date and route.start_date|length == 6 %}20{{ route.start_date[0:2] }}-{{ route.start_date[2:4] }}-{{ route.start_date[4:6] }}{% else %}-{% endif %}">
                                     {% if route.start_date and route.start_date|length == 6 %}
                                         <span class="small">
                                             {{ "20" + route.start_date[0:2] }}-{{ route.start_date[2:4] }}-{{ route.start_date[4:6] }}
@@ -131,7 +145,7 @@
                                 </td>
 
                                 {# Дата последнего изменения #}
-                                <td style="text-align: center;">
+                                <td style="text-align: center;" data-filter="{% if route.updated_at %}{{ ' '.join(route.updated_at.split('.')[0].split('T')) }}{% else %}-{% endif %}">
                                     {% if route.updated_at %}
                                         <span class="small">
                                             {{ " ".join(route.updated_at.split('.')[0].split('T')) }}
@@ -318,12 +332,12 @@
             "language": {
                 "processing": "Подождите...",
                 "search": "Поиск:",
-                "lengthMenu": "Показать _MENU_ записей",
-                "info": "Записи с _START_ до _END_ из _TOTAL_ записей",
-                "infoEmpty": "Записи с 0 до 0 из 0 записей",
-                "infoFiltered": "(отфильтровано из _MAX_ записей)",
-                "loadingRecords": "Загрузка записей...",
-                "zeroRecords": "Записи отсутствуют.",
+                "lengthMenu": "Показать _MENU_ маршрутов на странице",
+                "info": "Записи с _START_ до _END_ из _TOTAL_ маршрутов",
+                "infoEmpty": "Нет доступных маршрутов",
+                "infoFiltered": "(отфильтровано из _MAX_ маршрутов)",
+                "loadingRecords": "Загрузка маршрутов...",
+                "zeroRecords": "Маршруты отсутствуют.",
                 "emptyTable": "В таблице отсутствуют данные",
                 "paginate": {
                     "first": "Первая",
@@ -338,6 +352,7 @@
             },
             "pageLength": 25,
             "order": [[1, "asc"]], // По умолчанию сортируем по дате изменения
+            "orderCellsTop": true, // ОТКЛЮЧАЕТ сортировку при клике на выпадающие списки в шапке
             "columnDefs": [
                 { "targets": "no-sort", "orderable": false } // Отключаем сортировку для чекбоксов и действий
             ],
@@ -347,6 +362,96 @@
                 var api = this.api();
                 $(api.table().container()).find('[data-bs-toggle="tooltip"]').each(function() {
                     new bootstrap.Tooltip(this);
+                });
+            },
+
+            // ГЕНЕРАЦИЯ ВЫПАДАЮЩИХ СПИСКОВ ДЛЯ СТОЛБЦОВ
+            initComplete: function () {
+                var api = this.api();
+                var filterRow = $('#routesTable thead tr').eq(1); 
+                
+                if (!filterRow.length) return;
+
+                api.columns().every(function () {
+                    var column = this;
+                    var headerCell = filterRow.find('th, td').eq(column.index());
+
+                    if (!headerCell.length) return;
+
+                    // Пропускаем ячейки с классом no-filter
+                    if (headerCell.hasClass('no-filter')) {
+                        return;
+                    }
+
+                    // Создаем селект
+                    var select = $('<select class="form-select form-select-sm py-0" style="font-size: 0.8rem; max-width: 80px; width: min-content;" title="Фильтр по столбцу"><option value="">Все</option></select>')
+                        .appendTo(headerCell.empty())
+                        .on('change', function () {
+                            var rawVal = $(this).val();
+                            var val = $.fn.dataTable.util.escapeRegex(rawVal);
+                            
+                            // ПОДСВЕТКА И ТУЛТИП АКТИВНОГО ФИЛЬТРА
+                            if (rawVal !== "") {
+                                $(this).addClass('filter-active');
+                                headerCell.addClass('has-filter-active');
+                                $(this).attr('title', rawVal); // Добавляем полный текст в тултип
+                            } else {
+                                $(this).removeClass('filter-active');
+                                headerCell.removeClass('has-filter-active');
+                                $(this).attr('title', 'Фильтр по столбцу'); // Возвращаем дефолтный тултип
+                            }
+
+                            // Для столбца "Статус" (индекс 11) ищем частичное совпадение.
+                            // Для ВСЕХ остальных столбцов используем строгое совпадение ^$
+                            if (column.index() === 11) { 
+                                column.search(val ? val : '', false, false).draw();
+                            } else {
+                                column.search(val ? '^' + val + '$' : '', true, false).draw();
+                            }
+
+                            if (typeof updateCount === "function") {
+                                updateCount(); 
+                            }
+                        });
+
+                    // 1. Собираем только уникальные значения для текущего столбца с учетом data-filter
+                    var rawValues = [];
+                    column.cells('', column.index()).render('filter').unique().each(function (val) {
+                        if (val) {
+                            val = val.trim();
+                            if (val !== "" && rawValues.indexOf(val) === -1) {
+                                rawValues.push(val);
+                            }
+                        }
+                    });
+
+                    // 2. Сортируем массив по-человечески (Естественная сортировка)
+                    rawValues.sort(function (a, b) {
+                        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+                    });
+
+                    // 3. Заполняем селект уже отсортированными и чистыми значениями
+                    rawValues.forEach(function (cleanText) {
+                        // БЕЗОПАСНАЯ ПРОВЕРКА: Проверяем, есть ли уже такая опция
+                        var exists = false;
+                        select.find('option').each(function() {
+                            if ($(this).val() === cleanText) {
+                                exists = true;
+                                return false; 
+                            }
+                        });
+
+                        // Если такой опции еще нет, добавляем её
+                        if (!exists) {
+                            select.append($('<option></option>').val(cleanText).text(cleanText));
+                        }
+                    });
+                    
+                    // Если в выпадающем списке кроме слова "Все" ничего не появилось,
+                    // очищаем ячейку, чтобы не оставлять пустой селект
+                    if (select.find('option').length <= 1) {
+                        headerCell.empty();
+                    }
                 });
             }
         });
@@ -398,14 +503,6 @@
                 }
             }
         }
-
-        //// Сброс чекбоксов при сортировке
-        //table.on('order.dt', function() {
-        //    // table.$('.route-checkbox').prop('checked', false);
-        //    if (selectAll) selectAll.checked = false;
-        //    if (selectAll) selectAll.indeterminate = false;
-        //    updateCount();
-        //});
 
         // Обработчик "Выбрать все" (с учетом всех страниц пагинации)
         if (selectAll) {
@@ -509,6 +606,5 @@
         document.body.appendChild(form);
         form.submit();
     }
-
 </script>
 {% endblock %}
