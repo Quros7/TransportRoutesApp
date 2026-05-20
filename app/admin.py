@@ -257,6 +257,10 @@ class AuditLogAdminView(SecureModelView):
     can_view_details = True
     page_size = 100
     column_default_sort = ("created_at", True)
+
+    # Указываем Flask-Admin использовать кастомный шаблон для списка
+    list_template = "admin/custom_list.html"
+
     column_list = ["created_at", "action", "entity_type", "user_id", "route_id", "endpoint", "method", "ip_address", "details"]
     column_labels = {
         "created_at": "Время (UTC)",
@@ -343,6 +347,20 @@ class AuditLogAdminView(SecureModelView):
         "user_id": _user_formatter,
         "route_id": _route_formatter,
     }
+
+    @expose('/clear_all/', methods=['POST'])
+    def clear_all_logs(self):
+        """Роут для полной очистки журнала аудите вручную."""
+        try:
+            # Выполняем TRUNCATE или DELETE для полной очистки таблицы
+            num_deleted = db.session.execute(sa.delete(AuditLog)).rowcount
+            db.session.commit()
+            flash(f"Журнал аудита успешно очищен. Удалено записей: {num_deleted}.", "success")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Ошибка при очистке журнала: {e}", "error")
+            
+        return redirect(url_for('.index_view'))
 
 
 def init_admin(app):

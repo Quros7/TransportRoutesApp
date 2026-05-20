@@ -1,5 +1,25 @@
 {% extends 'admin/model/list.html' %}
 
+{% block model_menu_bar %}
+    {# Сохраняем стандартное меню (фильтры, поиск и т.д.) #}
+    {{ super() }}
+
+    {# Динамическая проверка: если у текущего View есть метод очистки логов, выводим кнопку #}
+    {% if admin_view.clear_all_logs %}
+    <div class="pull-right" style="margin-right: 10px;">
+        <form action="{{ url_for('.clear_all_logs') }}" method="POST" style="display: inline;" onsubmit="return confirm('Вы уверены, что хотите полностью удалить ВСЕ записи из журнала аудита? Это действие необратимо.');">
+            {# {{ form.csrf_token }} #}
+            {# Раскомментируй строку ниже, если используешь Flask-WTF CSRF #}
+            {# <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/> #}
+
+            <button type="submit" class="btn btn-danger">
+                <i class="glyphicon glyphicon-trash"></i> Очистить журнал
+            </button>
+        </form>
+    </div>
+    {% endif %}
+{% endblock %}
+
 {% block tail_js %}
     {{ super() }}
     <script>

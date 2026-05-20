@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import logging
 from flask import has_request_context, request
 from flask_login import current_user
+import sqlalchemy as sa
 
 from app import db
 from app.models import AuditLog, Route
+
+MAX_LOGS_LIMIT = 1200  # Максимальное количество логов в базе
+BATCH_DELETE_SIZE = 200  # Сколько старых логов удалять за раз при переполнении
 
 
 def serialize_route(route: Route) -> dict:
@@ -48,4 +53,27 @@ def log_action(action: str, entity_type: str, route_id: int | None = None, detai
         user_agent=user_agent,
     )
     db.session.add(log)
+
+    # --- АВТОМАТИЧЕСКАЯ ОЧИСТКА СТАРЫХ ЛОГОВ ---
+    try:
+        # Проверяем общее количество записей
+        total_logs = db.session.scalar(sa.select(sa.func.count(AuditLog.id))) or 0
+        
+        if total_logs >= MAX_LOGS_LIMIT:
+            # Находим ID, до которого нужно удалить старые записи (BATCH_DELETE_SIZE самых старых)
+            subquery = (
+                sa.select(AuditLog.id)
+                .order_by(AuditLog.created_at.asc())
+                .limit(BATCH_DELETE_SIZE)
+                .scalar_subquery()
+            )
+            
+            # Удаляем пачку старых логов
+            db.session.execute(
+                sa.delete(AuditLog).where(AuditLog.id.in_(subquery))
+            )
+    except Exception as e:
+        # Логируем ошибку, чтобы из-за сбоя очистки не падало основное действие пользователя
+        logging.error(f"Ошибка при автоматической очистке AuditLog: {e}")
+
     return log
