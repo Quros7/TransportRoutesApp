@@ -48,6 +48,7 @@ class ExcelRouteImporter:
         route_info = self.get_route_info()
         tariff_blocks = []
         all_stops = []
+        all_distances = []
         
         # Находим все строки-заголовки
         raw_blocks = []
@@ -66,10 +67,11 @@ class ExcelRouteImporter:
                 continue
             
             header["uid"] = new_uid
-            stops, matrix = self._parse_matrix_data(start_row)
+            stops, distances, matrix = self._parse_matrix_data(start_row)
             
             if i == 0:
                 all_stops = stops
+                all_distances = distances
             
             header["matrix"] = matrix
             tariff_blocks.append(header)
@@ -77,6 +79,7 @@ class ExcelRouteImporter:
         return {
             "route_info": route_info,
             "stops": all_stops,
+            "distances": all_distances,
             "tariffs": tariff_blocks
         }
 
@@ -114,6 +117,7 @@ class ExcelRouteImporter:
     
     def _parse_matrix_data(self, start_row):
         stops = []
+        distances = []
         prices_matrix = []
         current_row = start_row + 2
         
@@ -122,12 +126,15 @@ class ExcelRouteImporter:
             if zone_idx_cell is None or not str(zone_idx_cell).isdigit():
                 break
             
-            stops.append(self.sheet.cell(row=current_row, column=2).value)
+            # Наименование остановки в колонке C (3)
+            stops.append(self.sheet.cell(row=current_row, column=3).value)
+            # Расстояние от начала маршрута в колонке B (2)
+            distances.append(self.sheet.cell(row=current_row, column=2).value)
             
             row_prices = []
             # Читаем фиксированное количество колонок (по числу остановок)
-            # Начинаем с 3-й колонки (C), где заголовок "0"
-            for col_idx in range(3, 3 + 50): # 50 как предел
+            # Матрица цен начинается с колонки D (4), где заголовок "0"
+            for col_idx in range(4, 4 + 50): # 50 как предел
                 price = self.sheet.cell(row=current_row, column=col_idx).value
                 # Если заголовок столбца пустой — цены кончились
                 header = self.sheet.cell(row=start_row + 1, column=col_idx).value
@@ -138,7 +145,7 @@ class ExcelRouteImporter:
             prices_matrix.append(row_prices)
             current_row += 1
             
-        return stops, prices_matrix
+        return stops, distances, prices_matrix
     
     def _detect_max_decimal_places(self, tariffs_data):
         """
@@ -193,7 +200,7 @@ class ExcelRouteImporter:
                         val = float(price)
                         
                         # ЛОГИКА ТРАНСПОРНИРОВАНИЯ:
-                        # В Excel TRFZ цена "Из А в Б" часто лежит в нижнем углу.
+                        # В Excel TRFZ цена "Из А в Б" лежит в нижнем углу.
                         # Чтобы она попала в верхний угол матрицы цен (от меньшего индекса к большему),
                         # берём координаты так, чтобы всегда записывать в [min][max].
                         
@@ -218,11 +225,23 @@ class ExcelRouteImporter:
         raw = self.get_full_data()
         detected_places = self._detect_max_decimal_places(raw["tariffs"])
         
-        # Подготавливаем остановки
-        formatted_stops = [
-            {"name": str(name).strip(), "km": "{:.2f}".format(float(i))} 
-            for i, name in enumerate(raw["stops"], start=0)
-        ]
+        # Подготавливаем остановки с использованием реального километража
+        formatted_stops = []
+        for idx, name in enumerate(raw["stops"]):
+            # Безопасно достаем километраж для текущего индекса остановки
+            raw_km = raw["distances"][idx] if idx < len(raw["distances"]) else 0.0
+            
+            try:
+                if isinstance(raw_km, str):
+                    raw_km = raw_km.replace(',', '.')  # Защита от локали с запятыми
+                km_float = float(raw_km) if raw_km is not None else 0.0
+            except (ValueError, TypeError):
+                km_float = 0.0
+                
+            formatted_stops.append({
+                "name": str(name).strip() if name else f"Остановка {idx}",
+                "km": "{:.2f}".format(km_float)
+            })
         
         # Извлекаем исходные данные из Excel
         info = raw["route_info"]

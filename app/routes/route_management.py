@@ -964,7 +964,7 @@ def sort_bulk_routes():
                            next_page=next_page,)
 
 
-# Импорт маршрута (Полная версия: TRFZ + Excel)
+# Импорт маршрута (TRFZ + Excel)
 @bp.route("/route/import", methods=["GET", "POST"])
 @login_required
 def import_route():

@@ -8,8 +8,9 @@ services:
       - ./data:/transport_app/instance # Синхронизация кода: корень проекта на ПК связан с /transport_app в Docker (правишь на ПК — меняется в Docker)
     environment:
       - FLASK_APP=transportapp.py
-      - FLASK_DEBUG=0
-      - SECRET_KEY=dev-key-123
+      - FLASK_DEBUG=${FLASK_DEBUG:-0} # Если переменная не задана, будет 0
+      - SECRET_KEY=${SECRET_KEY}      # Подставится из локального .env
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD} # Нужен только при установке с нуля
       # Путь к базе внутри контейнера
       - DATABASE_URL=sqlite:////transport_app/instance/app.db
     restart: always
