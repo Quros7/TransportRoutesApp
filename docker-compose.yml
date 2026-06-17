@@ -1,6 +1,6 @@
 services:
   web:
-    build: .
+    image: transport_app:latest
     container_name: transport_app_container
     ports:
       - "5000:5000"

@@ -37,3 +37,7 @@ Thumbs.db
 migrations/versions/*
 !migrations/versions/.keep
 .coverage
+
+# Файлы сборки
+.tar
+.zip
