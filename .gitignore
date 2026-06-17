@@ -39,5 +39,5 @@ migrations/versions/*
 .coverage
 
 # Файлы сборки
-.tar
-.zip
+*.tar
+*.zip
